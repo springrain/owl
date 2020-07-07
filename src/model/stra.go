@@ -44,6 +44,7 @@ type Stra struct {
 	NotifyUser       []int        `xorm:"-" json:"notify_user"`
 	LeafNids         []int64      `xorm:"-" json:"leaf_nids"` //叶子节点id
 	Endpoints        []string     `xorm:"-" json:"endpoints"`
+	Nids             []string     `xorm:"-" json:"nids"`
 	AlertUpgrade     AlertUpgrade `xorm:"-" json:"alert_upgrade"`
 	JudgeInstance    string       `xorm:"-" json:"judge_instance"`
 }

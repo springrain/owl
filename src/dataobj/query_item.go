@@ -5,6 +5,7 @@ type QueryData struct {
 	End        int64    `json:"end"`
 	ConsolFunc string   `json:"consolFunc"`
 	Endpoints  []string `json:"endpoints"`
+	Nids       []string `json:"nids"`
 	Counters   []string `json:"counters"`
 	Step       int      `json:"step"`
 	DsType     string   `json:"dstype"`
@@ -15,6 +16,7 @@ type QueryDataForUI struct {
 	End         int64    `json:"end"`
 	Metric      string   `json:"metric"`
 	Endpoints   []string `json:"endpoints"`
+	Nids        []string `json:"nids"`
 	Tags        []string `json:"tags"`
 	Step        int      `json:"step"`
 	DsType      string   `json:"dstype"`
@@ -28,6 +30,7 @@ type QueryDataForUIResp struct {
 	Start      int64      `json:"start"`
 	End        int64      `json:"end"`
 	Endpoint   string     `json:"endpoint"`
+	Nid        string     `json:"nid"`
 	Counter    string     `json:"counter"`
 	DsType     string     `json:"dstype"`
 	Step       int        `json:"step"`

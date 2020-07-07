@@ -117,3 +117,8 @@ type TsdbQueryParam struct {
 func (g *TsdbQueryParam) PK() string {
 	return PKWithCounter(g.Endpoint, g.Counter)
 }
+
+func NidToEndpoint(nid string) string {
+	endpoint := "__nid__" + nid + "__"
+	return endpoint
+}

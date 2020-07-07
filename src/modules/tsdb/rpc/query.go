@@ -33,6 +33,10 @@ func (g *Tsdb) Query(param dataobj.TsdbQueryParam, resp *dataobj.TsdbQueryRespon
 	resp.Endpoint = param.Endpoint
 	resp.Counter = param.Counter
 	resp.Nid = param.Nid
+	if param.Nid != "" {
+		param.Endpoint = dataobj.NidToEndpoint(param.Nid)
+	}
+
 	needStep := 0
 	dsType := param.DsType
 

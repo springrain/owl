@@ -9,7 +9,9 @@ import (
 
 type MaskconfForm struct {
 	Nid       int64    `json:"nid"`
+	Category  int      `json:"category"` //机器，非机器
 	Endpoints []string `json:"endpoints"`
+	Nids      []string `json:"nids"`
 	Metric    string   `json:"metric"`
 	Tags      string   `json:"tags"`
 	Cause     string   `json:"cause"`

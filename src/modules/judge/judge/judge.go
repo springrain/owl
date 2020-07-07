@@ -109,7 +109,7 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 				ID:        fmt.Sprintf("s_%d_%s", stra.Id, firstItem.PrimaryKey()),
 				Etime:     now,
 				Endpoint:  firstItem.Endpoint,
-				Nid:       firstItem.Nid,
+				CurNid:    firstItem.Nid,
 				Info:      info,
 				Detail:    string(bs),
 				Value:     value,
@@ -143,6 +143,7 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 
 				judgeItem := &dataobj.JudgeItem{
 					Endpoint: firstItem.Endpoint,
+					Nid:      firstItem.Nid,
 					Metric:   stra.Exprs[0].Metric,
 					Tags:     "",
 					DsType:   "GAUGE",
@@ -172,6 +173,7 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 			}
 			for i := range respData {
 				firstItem.Endpoint = respData[i].Endpoint
+				firstItem.Nid = respData[i].Nid
 				firstItem.Tags = getTags(respData[i].Counter)
 				firstItem.Step = respData[i].Step
 				Judge(stra, exps[1:], dataobj.RRDData2HistoryData(respData[i].Values), firstItem, now, history, info, value, extra, status)
@@ -255,16 +257,16 @@ func GetData(stra *model.Stra, exp model.Exp, firstItem *dataobj.JudgeItem, now 
 		//+1 防止由于查询不到最新点，导致点数不够
 		start := now - int64(stra.AlertDur) - int64(firstItem.Step) + 1
 
-		queryParam, err := query.NewQueryRequest(firstItem.Endpoint, exp.Metric, firstItem.TagsMap, firstItem.Step, start, now)
+		queryParam, err := query.NewQueryRequest(firstItem.Nid, firstItem.Endpoint, exp.Metric, firstItem.TagsMap, firstItem.Step, start, now)
 		if err != nil {
 			return respData, err
 		}
 
 		reqs = append(reqs, queryParam)
 	} else if firstItem != nil { //点驱动告警策略的场景
-		reqs = GetReqs(stra, exp.Metric, []string{firstItem.Endpoint}, now)
+		reqs = GetReqs(stra, exp.Metric, []string{firstItem.Nid}, []string{firstItem.Endpoint}, now)
 	} else { //nodata的场景
-		reqs = GetReqs(stra, exp.Metric, stra.Endpoints, now)
+		reqs = GetReqs(stra, exp.Metric, stra.Nids, stra.Endpoints, now)
 	}
 
 	if len(reqs) == 0 {
@@ -280,11 +282,12 @@ func GetData(stra *model.Stra, exp model.Exp, firstItem *dataobj.JudgeItem, now 
 	return respData, err
 }
 
-func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*dataobj.QueryData {
+func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int64) []*dataobj.QueryData {
 	var reqs []*dataobj.QueryData
 	stats.Counter.Set("query.index", 1)
 
 	req := &query.IndexReq{
+		Nids:      nids,
 		Endpoints: endpoints,
 		Metric:    metric,
 	}
@@ -313,6 +316,7 @@ func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*
 		if index.Step == 0 {
 			//没有查到索引的 endpoint+metric 也要记录，给nodata处理
 			s := cache.Series{
+				Nid:      index.Nid,
 				Endpoint: index.Endpoint,
 				Metric:   index.Metric,
 				Tag:      "",
@@ -325,6 +329,7 @@ func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*
 			if len(index.Tags) == 0 {
 				hash := str.MD5(index.Endpoint, index.Metric, "")
 				s := cache.Series{
+					Nid:      index.Nid,
 					Endpoint: index.Endpoint,
 					Metric:   index.Metric,
 					Tag:      "",
@@ -337,6 +342,7 @@ func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*
 				for _, tag := range index.Tags {
 					hash := str.MD5(index.Endpoint, index.Metric, tag)
 					s := cache.Series{
+						Nid:      index.Nid,
 						Endpoint: index.Endpoint,
 						Metric:   index.Metric,
 						Tag:      tag,
@@ -372,6 +378,7 @@ func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*
 			Start:      start,
 			End:        now,
 			ConsolFunc: "AVERAGE", // 硬编码
+			Nids:       []string{series.Nid},
 			Endpoints:  []string{series.Endpoint},
 			Counters:   []string{counter},
 			Step:       series.Step,
@@ -390,6 +397,7 @@ func GetReqs(stra *model.Stra, metric string, endpoints []string, now int64) []*
 			End:        now,
 			ConsolFunc: "AVERAGE", // 硬编码
 			Endpoints:  []string{series.Endpoint},
+			Nids:       []string{series.Nid},
 			Counters:   []string{counter},
 			Step:       series.Step,
 			DsType:     series.Dstype,

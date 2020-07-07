@@ -99,6 +99,9 @@ func handleItems(items []*dataobj.TsdbItem) {
 }
 
 func convert2CacheServerItem(d *dataobj.TsdbItem) cache.Point {
+	if d.Nid != "" {
+		d.Endpoint = dataobj.NidToEndpoint(d.Nid)
+	}
 	p := cache.Point{
 		Key:       str.Checksum(d.Endpoint, d.Metric, str.SortedTags(d.TagsMap)),
 		Timestamp: d.Timestamp,

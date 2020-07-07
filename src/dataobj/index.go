@@ -1,6 +1,7 @@
 package dataobj
 
 type IndexModel struct {
+	Nid       string            `json:"nid"`
 	Endpoint  string            `json:"endpoint"`
 	Metric    string            `json:"metric"`
 	DsType    string            `json:"dsType"`

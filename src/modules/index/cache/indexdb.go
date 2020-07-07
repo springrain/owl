@@ -30,9 +30,11 @@ type CacheSection struct {
 	RebuildWorker   int    `yaml:"rebuildWorker"`
 	MaxQueryCount   int    `yaml:"maxQueryCount"`
 	ReportEndpoint  bool   `yaml:"reportEndpoint"`
+	HbsMod          string `yaml:"hbsMod"`
 }
 
 var IndexDB *EndpointIndexMap
+var NidIndexDB *EndpointIndexMap
 var Config CacheSection
 var NewEndpoints *list.SafeListLimited
 
@@ -42,6 +44,7 @@ func InitDB(cfg CacheSection) {
 	Config = cfg
 
 	IndexDB = &EndpointIndexMap{M: make(map[string]*MetricIndexMap)}
+	NidIndexDB = &EndpointIndexMap{M: make(map[string]*MetricIndexMap)}
 	NewEndpoints = list.NewSafeListLimited(100000)
 
 	Rebuild(Config.PersistDir, Config.RebuildWorker)
@@ -61,6 +64,7 @@ func StartCleaner(interval int, cacheDuration int) {
 
 		start := time.Now()
 		IndexDB.Clean(int64(cacheDuration))
+		NidIndexDB.Clean(int64(cacheDuration))
 		logger.Infof("clean took %.2f ms\n", float64(time.Since(start).Nanoseconds())*1e-6)
 	}
 }
@@ -93,12 +97,19 @@ func Rebuild(persistenceDir string, concurrency int) {
 		dbDir = fmt.Sprintf("%s/%s", persistenceDir, "db")
 	}
 
-	if err := RebuildFromDisk(dbDir, concurrency); err != nil {
+	endpointDir := dbDir + "/endpoint"
+	nidDir := dbDir + "/nid"
+
+	if err := RebuildFromDisk(IndexDB, endpointDir, concurrency); err != nil {
+		logger.Warningf("rebuild index from local disk error:%+v", err)
+	}
+
+	if err := RebuildFromDisk(NidIndexDB, nidDir, concurrency); err != nil {
 		logger.Warningf("rebuild index from local disk error:%+v", err)
 	}
 }
 
-func RebuildFromDisk(indexFileDir string, concurrency int) error {
+func RebuildFromDisk(indexDB *EndpointIndexMap, indexFileDir string, concurrency int) error {
 	logger.Info("Try to rebuild index from disk")
 	if !file.IsExist(indexFileDir) {
 		return fmt.Errorf("index persistence dir [%s] don't exist", indexFileDir)
@@ -133,9 +144,9 @@ func RebuildFromDisk(indexFileDir string, concurrency int) error {
 				NewEndpoints.PushFront(endpoint)
 			}
 
-			IndexDB.Lock()
-			IndexDB.M[endpoint] = metricIndexMap
-			IndexDB.Unlock()
+			indexDB.Lock()
+			indexDB.M[endpoint] = metricIndexMap
+			indexDB.Unlock()
 		}(endpoint)
 
 	}
@@ -173,7 +184,8 @@ func Persist(mode string) error {
 		return err
 	}
 
-	// write index data to disk
+	// write endpoint index data to disk
+	endpointDir := tmpDir + "/endpoint"
 	endpoints := IndexDB.GetEndpoints()
 	epLength := len(endpoints)
 	logger.Infof("save index data to disk[num:%d][mode:%s]\n", epLength, mode)
@@ -181,8 +193,21 @@ func Persist(mode string) error {
 	for i, endpoint := range endpoints {
 		logger.Infof("sync [%s] to disk, [%d%%] complete\n", endpoint, int((float64(i)/float64(epLength))*100))
 
-		if err := WriteIndexToFile(tmpDir, endpoint); err != nil {
+		if err := WriteIndexToFile(endpointDir, endpoint); err != nil {
 			logger.Errorf("write %s index to file err:%v\n", endpoint, err)
+		}
+	}
+
+	nidDir := tmpDir + "/endpoint"
+	nids := NidIndexDB.GetEndpoints()
+	nidLength := len(nids)
+	logger.Infof("save index data to disk[num:%d][mode:%s]\n", nidLength, mode)
+
+	for i, nid := range nids {
+		logger.Infof("sync [%s] to disk, [%d%%] complete\n", nid, int((float64(i)/float64(nidLength))*100))
+
+		if err := WriteIndexToFile(nidDir, nid); err != nil {
+			logger.Errorf("write %s index to file err:%v\n", nid, err)
 		}
 	}
 
@@ -241,7 +266,7 @@ func ReadIndexFromFile(indexDir, endpoint string) (*MetricIndexMap, error) {
 }
 
 func IndexList() []*model.Instance {
-	activeIndexes, err := report.GetAlive("index", "monapi")
+	activeIndexes, err := report.GetAlive("index", Config.HbsMod)
 	if err != nil {
 		return []*model.Instance{}
 	}

@@ -38,8 +38,8 @@ func nodataJudge() {
 	stras := cache.NodataStra.GetAll()
 	for _, stra := range stras {
 		//nodata处理
-		if len(stra.Endpoints) == 0 {
-			logger.Warningf("stra:%+v endpoints is null", stra)
+		if len(stra.Endpoints) == 0 && len(stra.Nids) == 0 {
+			logger.Warningf("stra:%+v endpoints or nids is null", stra)
 			continue
 		}
 
@@ -61,10 +61,12 @@ func nodataJudge() {
 				metric = data.Counter
 			}
 
-			if data.Endpoint == "" {
+			if data.Endpoint == "" && data.Nid == "" {
 				continue
 			}
+
 			judgeItem := &dataobj.JudgeItem{
+				Nid:      data.Nid,
 				Endpoint: data.Endpoint,
 				Metric:   metric,
 				Tags:     tag,

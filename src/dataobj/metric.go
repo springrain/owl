@@ -73,8 +73,13 @@ func (m *MetricValue) CheckValidity(now int64) (err error) {
 		return
 	}
 
-	if m.Metric == "" || m.Endpoint == "" {
-		err = fmt.Errorf("metric or endpoint should not be empty")
+	if m.Nid == "" && m.Endpoint == "" {
+		err = fmt.Errorf("nid or endpoint should not be empty")
+		return
+	}
+
+	if m.Metric == "" {
+		err = fmt.Errorf("metric should not be empty")
 		return
 	}
 

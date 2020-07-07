@@ -37,6 +37,7 @@ func push(mode int, addr string, tsdbItems []*dataobj.TsdbItem) {
 
 		var tmp dataobj.IndexModel
 		tmp.Endpoint = item.Endpoint
+		tmp.Nid = item.Nid
 		tmp.Metric = item.Metric
 		tmp.Step = item.Step
 		tmp.DsType = item.DsType

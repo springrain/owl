@@ -118,6 +118,7 @@ func QueryFromMem(reqs []*dataobj.QueryData, sid int64) ([]*dataobj.TsdbQueryRes
 				}
 			}
 		}
+
 		if len(newReq.Counters) > 0 {
 			newReqs = append(newReqs, newReq)
 		}
@@ -135,7 +136,7 @@ func Counter2Metric(counter string) (string, map[string]string) {
 	return arr[0], str.DictedTagstring(arr[1])
 }
 
-func NewQueryRequest(endpoint, metric string, tagsMap map[string]string,
+func NewQueryRequest(nid, endpoint, metric string, tagsMap map[string]string,
 	step int, start, end int64) (*dataobj.QueryData, error) {
 	if end <= start || start < 0 {
 		return nil, ErrorQueryParamIllegal
@@ -152,6 +153,7 @@ func NewQueryRequest(endpoint, metric string, tagsMap map[string]string,
 		End:        end,
 		Step:       step,
 		ConsolFunc: "AVERAGE", // 硬编码
+		Nids:       []string{nid},
 		Endpoints:  []string{endpoint},
 		Counters:   []string{counter},
 	}, nil
@@ -164,6 +166,7 @@ type XCludeStruct struct {
 }
 
 type IndexReq struct {
+	Nids      []string       `json:"nids"`
 	Endpoints []string       `json:"endpoints"`
 	Metric    string         `json:"metric"`
 	Include   []XCludeStruct `json:"include,omitempty"`
@@ -171,6 +174,7 @@ type IndexReq struct {
 }
 
 type IndexData struct {
+	Nid      string   `json:"nid"`
 	Endpoint string   `json:"endpoint"`
 	Metric   string   `json:"metric"`
 	Tags     []string `json:"tags"`

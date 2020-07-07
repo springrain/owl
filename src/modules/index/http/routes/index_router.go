@@ -14,6 +14,7 @@ import (
 
 type EndpointsRecv struct {
 	Endpoints []string `json:"endpoints"`
+	Nids      []string `json:"nids"`
 }
 
 type MetricList struct {
@@ -27,12 +28,25 @@ func GetMetrics(c *gin.Context) {
 
 	m := make(map[string]struct{})
 	resp := MetricList{}
-	for _, endpoint := range recv.Endpoints {
-		metrics := cache.IndexDB.GetMetricsBy(endpoint)
-		for _, metric := range metrics {
-			if _, exists := m[metric]; !exists {
-				m[metric] = struct{}{}
-				resp.Metrics = append(resp.Metrics, metric)
+
+	if len(recv.Nids) > 0 {
+		for _, nid := range recv.Nids {
+			metrics := cache.NidIndexDB.GetMetricsBy(nid)
+			for _, metric := range metrics {
+				if _, exists := m[metric]; !exists {
+					m[metric] = struct{}{}
+					resp.Metrics = append(resp.Metrics, metric)
+				}
+			}
+		}
+	} else {
+		for _, endpoint := range recv.Endpoints {
+			metrics := cache.IndexDB.GetMetricsBy(endpoint)
+			for _, metric := range metrics {
+				if _, exists := m[metric]; !exists {
+					m[metric] = struct{}{}
+					resp.Metrics = append(resp.Metrics, metric)
+				}
 			}
 		}
 	}
@@ -42,14 +56,20 @@ func GetMetrics(c *gin.Context) {
 
 type EndpointRecv struct {
 	Endpoints []string `json:"endpoints"`
+	Nids      []string `json:"nids"`
 }
 
 func DelIdxByEndpoint(c *gin.Context) {
 	recv := EndpointRecv{}
 	errors.Dangerous(c.ShouldBindJSON(&recv))
-
-	for _, endpoint := range recv.Endpoints {
-		cache.IndexDB.DelByEndpoint(endpoint)
+	if len(recv.Nids) > 0 {
+		for _, nid := range recv.Nids {
+			cache.NidIndexDB.DelByEndpoint(nid)
+		}
+	} else {
+		for _, endpoint := range recv.Endpoints {
+			cache.IndexDB.DelByEndpoint(endpoint)
+		}
 	}
 
 	render.Data(c, "ok", nil)
@@ -57,6 +77,7 @@ func DelIdxByEndpoint(c *gin.Context) {
 
 type EndpointMetricRecv struct {
 	Endpoints []string `json:"endpoints"`
+	Nids      []string `json:"nids"`
 	Metrics   []string `json:"metrics"`
 }
 
@@ -64,10 +85,20 @@ func DelMetrics(c *gin.Context) {
 	recv := EndpointMetricRecv{}
 	errors.Dangerous(c.ShouldBindJSON(&recv))
 
-	for _, endpoint := range recv.Endpoints {
-		if metricIndexMap, exists := cache.IndexDB.GetMetricIndexMap(endpoint); exists {
-			for _, metric := range recv.Metrics {
-				metricIndexMap.DelMetric(metric)
+	if len(recv.Nids) > 0 {
+		for _, nid := range recv.Nids {
+			if metricIndexMap, exists := cache.NidIndexDB.GetMetricIndexMap(nid); exists {
+				for _, metric := range recv.Metrics {
+					metricIndexMap.DelMetric(metric)
+				}
+			}
+		}
+	} else {
+		for _, endpoint := range recv.Endpoints {
+			if metricIndexMap, exists := cache.IndexDB.GetMetricIndexMap(endpoint); exists {
+				for _, metric := range recv.Metrics {
+					metricIndexMap.DelMetric(metric)
+				}
 			}
 		}
 	}
@@ -77,6 +108,7 @@ func DelMetrics(c *gin.Context) {
 
 type IndexTagkvResp struct {
 	Endpoints []string         `json:"endpoints"`
+	Nids      []string         `json:"nids"`
 	Metric    string           `json:"metric"`
 	Tagkv     []*cache.TagPair `json:"tagkv"`
 }
@@ -100,6 +132,21 @@ func DelCounter(c *gin.Context) {
 		}
 	}
 
+	for _, nid := range recv.Nids {
+		metricIndex, exists := cache.NidIndexDB.GetMetricIndex(nid, recv.Metric)
+		if !exists {
+			continue
+		}
+
+		for _, tagPair := range recv.Tagkv {
+			for _, v := range tagPair.Values {
+				metricIndex.Lock()
+				metricIndex.TagkvMap.DelTag(tagPair.Key, v)
+				metricIndex.Unlock()
+			}
+		}
+	}
+
 	render.Data(c, "ok", nil)
 }
 
@@ -108,15 +155,30 @@ func GetTagPairs(c *gin.Context) {
 	recv := EndpointMetricRecv{}
 	errors.Dangerous(c.ShouldBindJSON(&recv))
 
+	var keys []string
+	var indexDB *cache.EndpointIndexMap
+
+	if len(recv.Nids) > 0 {
+		indexDB = cache.NidIndexDB
+		for _, nid := range recv.Nids {
+			keys = append(keys, nid)
+		}
+	} else {
+		indexDB = cache.IndexDB
+		for _, endpoint := range recv.Endpoints {
+			keys = append(keys, endpoint)
+		}
+	}
+
 	resp := make([]*IndexTagkvResp, 0)
 	for _, metric := range recv.Metrics {
 		tagkvFilter := make(map[string]map[string]struct{})
 		tagkvs := make([]*cache.TagPair, 0)
 
-		for _, endpoint := range recv.Endpoints {
-			metricIndex, exists := cache.IndexDB.GetMetricIndex(endpoint, metric)
+		for _, key := range keys {
+			metricIndex, exists := indexDB.GetMetricIndex(key, metric)
 			if !exists {
-				logger.Debugf("index not found by %s %s", endpoint, metric)
+				logger.Debugf("index not found by %s %s", key, metric)
 				stats.Counter.Set("query.tag.miss", 1)
 				continue
 			}
@@ -155,6 +217,7 @@ func GetTagPairs(c *gin.Context) {
 
 		TagkvResp := IndexTagkvResp{
 			Endpoints: recv.Endpoints,
+			Nids:      recv.Nids,
 			Metric:    metric,
 			Tagkv:     tagkvs,
 		}
@@ -164,6 +227,7 @@ func GetTagPairs(c *gin.Context) {
 }
 
 type GetIndexByFullTagsRecv struct {
+	Nids      []string         `json:"nids"`
 	Endpoints []string         `json:"endpoints"`
 	Metric    string           `json:"metric"`
 	Tagkv     []*cache.TagPair `json:"tagkv"`
@@ -171,6 +235,7 @@ type GetIndexByFullTagsRecv struct {
 
 type GetIndexByFullTagsResp struct {
 	Endpoints []string `json:"endpoints"`
+	Nids      []string `json:"nids"`
 	Metric    string   `json:"metric"`
 	Tags      []string `json:"tags"`
 	Step      int      `json:"step"`
@@ -187,14 +252,28 @@ func GetIndexByFullTags(c *gin.Context) {
 
 	var resp []GetIndexByFullTagsResp
 	for _, r := range recv {
+		var keys []string
+		var indexDB *cache.EndpointIndexMap
+		if len(r.Nids) > 0 {
+			indexDB = cache.NidIndexDB
+			for _, nid := range r.Nids {
+				keys = append(keys, nid)
+			}
+		} else {
+			indexDB = cache.IndexDB
+			for _, endpoint := range r.Endpoints {
+				keys = append(keys, endpoint)
+			}
+		}
+
 		metric := r.Metric
 		tagkv := r.Tagkv
 		step := 0
 		dsType := ""
 
-		for _, endpoint := range r.Endpoints {
-			if endpoint == "" {
-				logger.Debugf("invalid request: lack of endpoint param:%v\n", r)
+		for _, key := range keys {
+			if key == "" {
+				logger.Debugf("invalid request: lack of key param:%v\n", r)
 				stats.Counter.Set("query.counter.miss", 1)
 				continue
 			}
@@ -204,9 +283,9 @@ func GetIndexByFullTags(c *gin.Context) {
 				continue
 			}
 
-			metricIndex, exists := cache.IndexDB.GetMetricIndex(endpoint, metric)
+			metricIndex, exists := indexDB.GetMetricIndex(key, metric)
 			if !exists {
-				logger.Debugf("can't found index by endpoint:%s metric:%v\n", endpoint, metric)
+				logger.Debugf("can't found index by key:%s metric:%v\n", key, metric)
 				stats.Counter.Set("query.counter.miss", 1)
 				continue
 			}
@@ -228,7 +307,7 @@ func GetIndexByFullTags(c *gin.Context) {
 				// 如果一个指标，比如 port.listen 有 name=uic,port=8056 和 name=hsp,port=8002。避免产生 4 个曲线
 				if _, exists := countersMap[tag]; !exists {
 					stats.Counter.Set("query.counter.miss", 1)
-					logger.Debugf("can't found counters by endpoint:%s metric:%v tags:%v\n", endpoint, metric, tag)
+					logger.Debugf("can't found counters by key:%s metric:%v tags:%v\n", key, metric, tag)
 					continue
 				}
 
@@ -241,6 +320,7 @@ func GetIndexByFullTags(c *gin.Context) {
 
 		resp = append(resp, GetIndexByFullTagsResp{
 			Endpoints: r.Endpoints,
+			Nids:      r.Nids,
 			Metric:    r.Metric,
 			Tags:      tagsList,
 			Step:      step,
@@ -253,6 +333,7 @@ func GetIndexByFullTags(c *gin.Context) {
 
 type CludeRecv struct {
 	Endpoints []string         `json:"endpoints"`
+	Nids      []string         `json:"nids"`
 	Metric    string           `json:"metric"`
 	Include   []*cache.TagPair `json:"include"`
 	Exclude   []*cache.TagPair `json:"exclude"`
@@ -260,6 +341,7 @@ type CludeRecv struct {
 
 type XcludeResp struct {
 	Endpoint string   `json:"endpoint"`
+	Nid      string   `json:"nid"`
 	Metric   string   `json:"metric"`
 	Tags     []string `json:"tags"`
 	Step     int      `json:"step"`
@@ -281,12 +363,26 @@ func GetIndexByClude(c *gin.Context) {
 		step := 0
 		dsType := ""
 
-		for _, endpoint := range r.Endpoints {
+		var keys []string
+		var indexDB *cache.EndpointIndexMap
+		if len(r.Nids) > 0 {
+			indexDB = cache.NidIndexDB
+			for _, nid := range r.Nids {
+				keys = append(keys, nid)
+			}
+		} else {
+			indexDB = cache.IndexDB
+			for _, endpoint := range r.Endpoints {
+				keys = append(keys, endpoint)
+			}
+		}
+
+		for _, key := range keys {
 			tagList := make([]string, 0)
 			tagFilter := make(map[string]struct{})
 
-			if endpoint == "" {
-				logger.Debugf("invalid request: lack of endpoint param:%v\n", r)
+			if key == "" {
+				logger.Debugf("invalid request: lack of key param:%v\n", r)
 				stats.Counter.Set("xclude.miss", 1)
 				continue
 			}
@@ -296,17 +392,17 @@ func GetIndexByClude(c *gin.Context) {
 				continue
 			}
 
-			metricIndex, exists := cache.IndexDB.GetMetricIndex(endpoint, metric)
+			metricIndex, exists := indexDB.GetMetricIndex(key, metric)
 			if !exists {
-
 				resp = append(resp, XcludeResp{
-					Endpoint: endpoint,
+					Endpoint: key,
+					Nid:      key,
 					Metric:   metric,
 					Tags:     tagList,
 					Step:     step,
 					DsType:   dsType,
 				})
-				logger.Debugf("can't found index by endpoint:%s metric:%v\n", endpoint, metric)
+				logger.Debugf("can't found index by key:%s metric:%v\n", key, metric)
 				stats.Counter.Set("xclude.miss", 1)
 
 				continue
@@ -330,7 +426,8 @@ func GetIndexByClude(c *gin.Context) {
 					tagList = append(tagList, counter)
 				}
 				resp = append(resp, XcludeResp{
-					Endpoint: endpoint,
+					Endpoint: key,
+					Nid:      key,
 					Metric:   metric,
 					Tags:     tagList,
 					Step:     step,
@@ -338,7 +435,7 @@ func GetIndexByClude(c *gin.Context) {
 				})
 				continue
 			} else {
-				tags, err = cache.IndexDB.GetIndexByClude(endpoint, metric, includeList, excludeList)
+				tags, err = cache.IndexDB.GetIndexByClude(key, metric, includeList, excludeList)
 				if err != nil {
 					logger.Warning(err)
 					continue
@@ -354,7 +451,7 @@ func GetIndexByClude(c *gin.Context) {
 				// 校验和 tag 有关的 counter 是否存在
 				// 如果一个指标，比如 port.listen 有 name=uic,port=8056 和 name=hsp,port=8002。避免产生 4 个曲线
 				if _, exists := counterMap[tag]; !exists {
-					logger.Debugf("can't found counters by endpoint:%s metric:%v tags:%v\n", endpoint, metric, tag)
+					logger.Debugf("can't found counters by key:%s metric:%v tags:%v\n", key, metric, tag)
 					stats.Counter.Set("xclude.miss", 1)
 					continue
 				}
@@ -366,7 +463,8 @@ func GetIndexByClude(c *gin.Context) {
 			}
 
 			resp = append(resp, XcludeResp{
-				Endpoint: endpoint,
+				Endpoint: key,
+				Nid:      key,
 				Metric:   metric,
 				Tags:     tagList,
 				Step:     step,

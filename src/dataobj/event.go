@@ -8,7 +8,7 @@ type Event struct {
 	Hashid       uint64    `json:"hashid"`     // 全局唯一 根据counter计算
 	Etime        int64     `json:"etime"`
 	Endpoint     string    `json:"endpoint"`
-	Nid          string    `json:"nid"`
+	CurNid       string    `json:"cur_nid"`
 	MachineIndep int       `json:"machine_indep"`
 	History      []History `json:"-"`
 	Detail       string    `json:"detail"`
