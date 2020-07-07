@@ -206,7 +206,12 @@ func Send2JudgeTask(Q *list.SafeListLimited, addr string, concurrent int) {
 func Push2JudgeSendQueue(items []*dataobj.MetricValue) {
 	errCnt := 0
 	for _, item := range items {
-		key := str.PK(item.Metric, item.Endpoint)
+		var key string
+		if item.Nid != "" {
+			key = str.PK(item.Metric, item.Nid)
+		} else {
+			key = str.PK(item.Metric, item.Endpoint)
+		}
 		stras := cache.StraMap.GetByKey(key)
 
 		for _, stra := range stras {
@@ -214,6 +219,7 @@ func Push2JudgeSendQueue(items []*dataobj.MetricValue) {
 				continue
 			}
 			judgeItem := &dataobj.JudgeItem{
+				Nid:       item.Nid,
 				Endpoint:  item.Endpoint,
 				Metric:    item.Metric,
 				Value:     item.Value,
@@ -240,6 +246,7 @@ func Push2JudgeSendQueue(items []*dataobj.MetricValue) {
 // 打到 Tsdb 的数据,要根据 rrdtool 的特定 来限制 step、counterType、timestamp
 func convert2TsdbItem(d *dataobj.MetricValue) *dataobj.TsdbItem {
 	item := &dataobj.TsdbItem{
+		Nid:       d.Nid,
 		Endpoint:  d.Endpoint,
 		Metric:    d.Metric,
 		Value:     d.Value,

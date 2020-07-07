@@ -17,7 +17,13 @@ const (
 	SPLIT    = "/"
 )
 
+const (
+	MachineDep = iota
+	MachineIndep
+)
+
 type MetricValue struct {
+	Nid          string            `json:"nid"`
 	Metric       string            `json:"metric"`
 	Endpoint     string            `json:"endpoint"`
 	Timestamp    int64             `json:"timestamp"`
@@ -198,7 +204,6 @@ func filterString(str string) string {
 				r == '\n' ||
 				r == ',' ||
 				r == ' ' ||
-				r == ':' ||
 				r == '='
 		}) {
 
@@ -211,7 +216,6 @@ func filterString(str string) string {
 			r == '\n' ||
 			r == ',' ||
 			r == ' ' ||
-			r == ':' ||
 			r == '=' {
 			return '_'
 		}

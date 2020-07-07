@@ -16,7 +16,6 @@ const (
 
 func Push2Index(mode int, items []*dataobj.TsdbItem, indexAddrs []string) {
 	for _, addr := range indexAddrs {
-		//TODO 改为并发
 		push(mode, addr, items)
 	}
 }

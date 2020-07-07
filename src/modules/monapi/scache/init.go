@@ -49,6 +49,7 @@ func syncStras() {
 			continue
 		}
 
+		//设备相关
 		endpoints, err := model.EndpointUnderLeafs(stra.LeafNids)
 		if err != nil {
 			logger.Warningf("get endpoints err:%v %v", err, stra)
@@ -58,6 +59,8 @@ func syncStras() {
 		for _, e := range endpoints {
 			stra.Endpoints = append(stra.Endpoints, e.Ident)
 		}
+
+		//设备无关
 
 		node, err := JudgeHashRing.GetNode(strconv.FormatInt(stra.Id, 10))
 		if err != nil {

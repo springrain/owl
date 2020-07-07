@@ -109,6 +109,7 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 				ID:        fmt.Sprintf("s_%d_%s", stra.Id, firstItem.PrimaryKey()),
 				Etime:     now,
 				Endpoint:  firstItem.Endpoint,
+				Nid:       firstItem.Nid,
 				Info:      info,
 				Detail:    string(bs),
 				Value:     value,

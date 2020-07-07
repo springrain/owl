@@ -9,6 +9,7 @@ import (
 )
 
 type JudgeItem struct {
+	Nid       string            `json:"nid"`
 	Endpoint  string            `json:"endpoint"`
 	Metric    string            `json:"metric"`
 	Tags      string            `json:"tags"`

@@ -47,6 +47,7 @@ type TsdbQueryResponse struct {
 	Start    int64      `json:"start"`
 	End      int64      `json:"end"`
 	Endpoint string     `json:"endpoint"`
+	Nid      string     `json:"nid"`
 	Counter  string     `json:"counter"`
 	DsType   string     `json:"dstype"`
 	Step     int        `json:"step"`
@@ -54,6 +55,7 @@ type TsdbQueryResponse struct {
 }
 
 type TsdbItem struct {
+	Nid       string            `json:"nid"`
 	Endpoint  string            `json:"endpoint"`
 	Metric    string            `json:"metric"`
 	Tags      string            `json:"tags"`
@@ -105,6 +107,7 @@ type TsdbQueryParam struct {
 	Start      int64  `json:"start"`
 	End        int64  `json:"end"`
 	ConsolFunc string `json:"consolFunc"`
+	Nid        string `json:"nid"`
 	Endpoint   string `json:"endpoint"`
 	Counter    string `json:"counter"`
 	Step       int    `json:"step"`

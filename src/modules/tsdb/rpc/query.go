@@ -32,6 +32,7 @@ func (g *Tsdb) Query(param dataobj.TsdbQueryParam, resp *dataobj.TsdbQueryRespon
 	resp.Values = []*dataobj.RRDData{}
 	resp.Endpoint = param.Endpoint
 	resp.Counter = param.Counter
+	resp.Nid = param.Nid
 	needStep := 0
 	dsType := param.DsType
 
