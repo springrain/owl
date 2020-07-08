@@ -18,8 +18,8 @@ const (
 )
 
 const (
-	MachineDep = iota
-	MachineIndep
+	MachineDep   = 1
+	MachineIndep = 2
 )
 
 type MetricValue struct {

@@ -2,19 +2,18 @@ package dataobj
 
 // Event 传递到alarm的结构体, 尽可能少的字段, 发出通知需要的信息由alarm自己补全
 type Event struct {
-	ID           string    `json:"-"`
-	Sid          int64     `json:"sid"`
-	EventType    string    `json:"event_type"` // alert/recover
-	Hashid       uint64    `json:"hashid"`     // 全局唯一 根据counter计算
-	Etime        int64     `json:"etime"`
-	Endpoint     string    `json:"endpoint"`
-	CurNid       string    `json:"cur_nid"`
-	MachineIndep int       `json:"machine_indep"`
-	History      []History `json:"-"`
-	Detail       string    `json:"detail"`
-	Info         string    `json:"info"`
-	Value        string    `json:"value"`
-	Partition    string    `json:"-"`
+	ID        string    `json:"-"`
+	Sid       int64     `json:"sid"`
+	EventType string    `json:"event_type"` // alert/recover
+	Hashid    uint64    `json:"hashid"`     // 全局唯一 根据counter计算
+	Etime     int64     `json:"etime"`
+	Endpoint  string    `json:"endpoint"`
+	History   []History `json:"-"`
+	Detail    string    `json:"detail"`
+	Info      string    `json:"info"`
+	Value     string    `json:"value"`
+	Partition string    `json:"-"`
+	CurNid    string    `json:"cur_nid"`
 }
 
 type History struct {

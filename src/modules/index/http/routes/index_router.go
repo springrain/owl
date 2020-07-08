@@ -117,32 +117,34 @@ func DelCounter(c *gin.Context) {
 	recv := IndexTagkvResp{}
 	errors.Dangerous(c.ShouldBindJSON(&recv))
 
-	for _, endpoint := range recv.Endpoints {
-		metricIndex, exists := cache.IndexDB.GetMetricIndex(endpoint, recv.Metric)
-		if !exists {
-			continue
-		}
+	if len(recv.Nids) > 0 {
+		for _, nid := range recv.Nids {
+			metricIndex, exists := cache.NidIndexDB.GetMetricIndex(nid, recv.Metric)
+			if !exists {
+				continue
+			}
 
-		for _, tagPair := range recv.Tagkv {
-			for _, v := range tagPair.Values {
-				metricIndex.Lock()
-				metricIndex.TagkvMap.DelTag(tagPair.Key, v)
-				metricIndex.Unlock()
+			for _, tagPair := range recv.Tagkv {
+				for _, v := range tagPair.Values {
+					metricIndex.Lock()
+					metricIndex.TagkvMap.DelTag(tagPair.Key, v)
+					metricIndex.Unlock()
+				}
 			}
 		}
-	}
+	} else {
+		for _, endpoint := range recv.Endpoints {
+			metricIndex, exists := cache.IndexDB.GetMetricIndex(endpoint, recv.Metric)
+			if !exists {
+				continue
+			}
 
-	for _, nid := range recv.Nids {
-		metricIndex, exists := cache.NidIndexDB.GetMetricIndex(nid, recv.Metric)
-		if !exists {
-			continue
-		}
-
-		for _, tagPair := range recv.Tagkv {
-			for _, v := range tagPair.Values {
-				metricIndex.Lock()
-				metricIndex.TagkvMap.DelTag(tagPair.Key, v)
-				metricIndex.Unlock()
+			for _, tagPair := range recv.Tagkv {
+				for _, v := range tagPair.Values {
+					metricIndex.Lock()
+					metricIndex.TagkvMap.DelTag(tagPair.Key, v)
+					metricIndex.Unlock()
+				}
 			}
 		}
 	}
@@ -435,7 +437,7 @@ func GetIndexByClude(c *gin.Context) {
 				})
 				continue
 			} else {
-				tags, err = cache.IndexDB.GetIndexByClude(key, metric, includeList, excludeList)
+				tags, err = indexDB.GetIndexByClude(key, metric, includeList, excludeList)
 				if err != nil {
 					logger.Warning(err)
 					continue
