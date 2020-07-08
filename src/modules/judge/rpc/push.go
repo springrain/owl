@@ -19,9 +19,6 @@ func (j *Judge) Send(items []*dataobj.JudgeItem, resp *dataobj.SimpleRpcResponse
 	// 把当前时间的计算放在最外层，是为了减少获取时间时的系统调用开销
 
 	for _, item := range items {
-		if item.Nid != "" {
-			item.Endpoint = dataobj.NidToEndpoint(item.Nid)
-		}
 		now := item.Timestamp
 		pk := item.MD5()
 		logger.Debugf("recv-->%+v", item)

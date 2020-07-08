@@ -23,9 +23,9 @@ type JudgeItem struct {
 }
 
 func (j *JudgeItem) PrimaryKey() string {
-	return str.PK(j.Endpoint, j.Metric, j.Tags)
+	return str.PK(j.Nid, j.Endpoint, j.Metric, j.Tags)
 }
 
 func (j *JudgeItem) MD5() string {
-	return gstr.MD5(str.PK(strconv.FormatInt(j.Sid, 16), j.Endpoint, j.Metric, str.SortedTags(j.TagsMap)))
+	return gstr.MD5(str.PK(strconv.FormatInt(j.Sid, 16), j.Nid, j.Endpoint, j.Metric, str.SortedTags(j.TagsMap)))
 }

@@ -43,15 +43,28 @@ func SyncMaskconf() error {
 	// value: tags
 	maskMap := make(map[string][]string)
 	for i := 0; i < len(mcs); i++ {
-		err := mcs[i].FillEndpoints()
-		if err != nil {
-			return fmt.Errorf("%v fill endpoints fail: %v", mcs[i], err)
+		if mcs[i].Category == 1 {
+			err := mcs[i].FillEndpoints()
+			if err != nil {
+				return fmt.Errorf("%v fill endpoints fail: %v", mcs[i], err)
+			}
+
+			for j := 0; j < len(mcs[i].Endpoints); j++ {
+				key := mcs[i].Metric + "#" + mcs[i].Endpoints[j]
+				maskMap[key] = append(maskMap[key], mcs[i].Tags)
+			}
+		} else {
+			err := mcs[i].FillNids()
+			if err != nil {
+				return fmt.Errorf("%v fill endpoints fail: %v", mcs[i], err)
+			}
+
+			for nid, _ := range mcs[i].CurNidPaths {
+				key := mcs[i].Metric + "#" + nid
+				maskMap[key] = append(maskMap[key], mcs[i].Tags)
+			}
 		}
 
-		for j := 0; j < len(mcs[i].Endpoints); j++ {
-			key := mcs[i].Metric + "#" + mcs[i].Endpoints[j]
-			maskMap[key] = append(maskMap[key], mcs[i].Tags)
-		}
 	}
 
 	mcache.MaskCache.SetAll(maskMap)
@@ -73,10 +86,22 @@ func IsMaskEvent(event *model.Event) bool {
 		for k, v := range detail[i].Tags {
 			eventTagsList = append(eventTagsList, fmt.Sprintf("%s=%s", strings.TrimSpace(k), strings.TrimSpace(v)))
 		}
-		key := eventMetric + "#" + event.Endpoint
-		endpointKey := "#" + event.Endpoint
-		maskTagsList, exists := mcache.MaskCache.GetByKey(endpointKey)
-		if !exists {
+
+		var maskTagsList []string
+		var exists bool
+
+		if event.Category == 1 {
+			key := eventMetric + "#" + event.Endpoint
+			endpointKey := "#" + event.Endpoint
+			maskTagsList, exists = mcache.MaskCache.GetByKey(endpointKey)
+			if !exists {
+				maskTagsList, exists = mcache.MaskCache.GetByKey(key)
+				if !exists {
+					continue
+				}
+			}
+		} else {
+			key := eventMetric + "#" + event.CurNid
 			maskTagsList, exists = mcache.MaskCache.GetByKey(key)
 			if !exists {
 				continue

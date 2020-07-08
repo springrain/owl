@@ -9,19 +9,21 @@ import (
 )
 
 type Maskconf struct {
-	Id        int64    `json:"id"`
-	Nid       int64    `json:"nid"`
-	NodePath  string   `json:"node_path" xorm:"-"`
-	Metric    string   `json:"metric"`
-	Tags      string   `json:"tags"`
-	Cause     string   `json:"cause"`
-	User      string   `json:"user"`
-	Btime     int64    `json:"btime"`
-	Etime     int64    `json:"etime"`
-	Endpoints []string `json:"endpoints" xorm:"-"`
+	Id          int64             `json:"id"`
+	Category    int               `json:"category"`
+	Nid         int64             `json:"nid"`
+	NodePath    string            `json:"node_path" xorm:"-"`
+	Metric      string            `json:"metric"`
+	Tags        string            `json:"tags"`
+	Cause       string            `json:"cause"`
+	User        string            `json:"user"`
+	Btime       int64             `json:"btime"`
+	Etime       int64             `json:"etime"`
+	Endpoints   []string          `json:"endpoints" xorm:"-"`
+	CurNidPaths map[string]string `json:"cur_nid_paths" xorm:"-"`
 }
 
-func (mc *Maskconf) Add(endpoints []string) error {
+func (mc *Maskconf) AddEndpoints(endpoints []string) error {
 	_, err := DB["mon"].Insert(mc)
 	if err != nil {
 		return err
@@ -54,6 +56,39 @@ func (mc *Maskconf) Add(endpoints []string) error {
 	return nil
 }
 
+func (mc *Maskconf) AddNids(nidPaths map[string]string) error {
+	_, err := DB["mon"].Insert(mc)
+	if err != nil {
+		return err
+	}
+
+	affected := 0
+	for nid, path := range nidPaths {
+		nid := strings.TrimSpace(nid)
+		if nid == "" {
+			continue
+		}
+
+		_, err = DB["mon"].Insert(&MaskconfNids{
+			MaskId: mc.Id,
+			Nid:    nid,
+			Path:   path,
+		})
+
+		if err != nil {
+			return err
+		}
+
+		affected++
+	}
+
+	if affected == 0 {
+		return fmt.Errorf("arg[nids] empty")
+	}
+
+	return nil
+}
+
 func (mc *Maskconf) FillEndpoints() error {
 	var objs []MaskconfEndpoints
 	err := DB["mon"].Where("mask_id=?", mc.Id).OrderBy("id").Find(&objs)
@@ -68,6 +103,22 @@ func (mc *Maskconf) FillEndpoints() error {
 	}
 
 	mc.Endpoints = arr
+	return nil
+}
+
+func (mc *Maskconf) FillNids() error {
+	var objs []MaskconfNids
+	err := DB["mon"].Where("mask_id=?", mc.Id).OrderBy("id").Find(&objs)
+	if err != nil {
+		return err
+	}
+
+	cnt := len(objs)
+
+	mc.CurNidPaths = make(map[string]string, cnt)
+	for i := 0; i < cnt; i++ {
+		mc.CurNidPaths[objs[i].Nid] = objs[i].Path
+	}
 	return nil
 }
 
@@ -158,6 +209,11 @@ func MaskconfDel(id int64) error {
 		return err
 	}
 
+	_, err = DB["mon"].Where("mask_id=?", id).Delete(new(MaskconfNids))
+	if err != nil {
+		return err
+	}
+
 	_, err = DB["mon"].Where("id=?", id).Delete(new(Maskconf))
 	return err
 }
@@ -196,6 +252,11 @@ func CleanExpireMask(now int64) error {
 			session.Rollback()
 			return err
 		}
+
+		if _, err := session.Exec("delete from maskconf_nids where mask_id=?", objs[i].Id); err != nil {
+			session.Rollback()
+			return err
+		}
 	}
 
 	err = session.Commit()
@@ -216,7 +277,7 @@ func MaskconfGet(col string, value interface{}) (*Maskconf, error) {
 	return &obj, nil
 }
 
-func (mc *Maskconf) Update(endpoints []string, cols ...string) error {
+func (mc *Maskconf) UpdateEndpoints(endpoints []string, cols ...string) error {
 	session := DB["mon"].NewSession()
 	defer session.Close()
 
@@ -252,6 +313,58 @@ func (mc *Maskconf) Update(endpoints []string, cols ...string) error {
 		}
 
 		affected += 1
+	}
+
+	if affected == 0 {
+		session.Rollback()
+		return fmt.Errorf("arg[endpoints] empty")
+	}
+
+	if err := session.Commit(); err != nil {
+		session.Rollback()
+		return err
+	}
+
+	return nil
+}
+
+func (mc *Maskconf) UpdateNids(nidPaths map[string]string, cols ...string) error {
+	session := DB["mon"].NewSession()
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		return err
+	}
+
+	if _, err := session.Where("id=?", mc.Id).Cols(cols...).Update(mc); err != nil {
+		session.Rollback()
+		return err
+	}
+
+	if _, err := session.Exec("delete from maskconf_nids where mask_id=?", mc.Id); err != nil {
+		session.Rollback()
+		return err
+	}
+
+	affected := 0
+	for nid, path := range nidPaths {
+		nid := strings.TrimSpace(nid)
+		if nid == "" {
+			continue
+		}
+
+		_, err := session.Insert(&MaskconfNids{
+			MaskId: mc.Id,
+			Nid:    nid,
+			Path:   path,
+		})
+
+		if err != nil {
+			session.Rollback()
+			return err
+		}
+
+		affected++
 	}
 
 	if affected == 0 {

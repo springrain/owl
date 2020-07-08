@@ -8,22 +8,26 @@ import (
 )
 
 type MaskconfForm struct {
-	Nid       int64    `json:"nid"`
-	Category  int      `json:"category"` //机器，非机器
-	Endpoints []string `json:"endpoints"`
-	Nids      []string `json:"nids"`
-	Metric    string   `json:"metric"`
-	Tags      string   `json:"tags"`
-	Cause     string   `json:"cause"`
-	Btime     int64    `json:"btime"`
-	Etime     int64    `json:"etime"`
+	Nid         int64             `json:"nid"`
+	Category    int               `json:"category"` //1 设备相关 2 设备无关
+	Endpoints   []string          `json:"endpoints"`
+	CurNidPaths map[string]string `json:"cur_nid_paths"`
+	Metric      string            `json:"metric"`
+	Tags        string            `json:"tags"`
+	Cause       string            `json:"cause"`
+	Btime       int64             `json:"btime"`
+	Etime       int64             `json:"etime"`
 }
 
 func (f MaskconfForm) Validate() {
 	mustNode(f.Nid)
 
-	if f.Endpoints == nil || len(f.Endpoints) == 0 {
+	if f.Category == 1 && (f.Endpoints == nil || len(f.Endpoints) == 0) {
 		errors.Bomb("arg[endpoints] empty")
+	}
+
+	if f.Category == 2 && len(f.CurNidPaths) == 0 {
+		errors.Bomb("arg[cur_nid_paths] empty")
 	}
 
 	if f.Btime >= f.Etime {
@@ -46,7 +50,13 @@ func maskconfPost(c *gin.Context) {
 		User:   loginUsername(c),
 	}
 
-	renderMessage(c, obj.Add(f.Endpoints))
+	if f.Category == 1 {
+		errors.Dangerous(obj.AddEndpoints(f.Endpoints))
+	} else {
+		errors.Dangerous(obj.AddNids(f.CurNidPaths))
+	}
+
+	renderMessage(c, nil)
 }
 
 func maskconfGets(c *gin.Context) {
@@ -56,7 +66,11 @@ func maskconfGets(c *gin.Context) {
 	errors.Dangerous(err)
 
 	for i := 0; i < len(objs); i++ {
-		errors.Dangerous(objs[i].FillEndpoints())
+		if objs[i].Category == 1 {
+			errors.Dangerous(objs[i].FillEndpoints())
+		} else {
+			errors.Dangerous(objs[i].FillNids())
+		}
 	}
 
 	renderData(c, objs, nil)
@@ -84,5 +98,11 @@ func maskconfPut(c *gin.Context) {
 	mc.Etime = f.Etime
 	mc.Btime = f.Btime
 	mc.Cause = f.Cause
-	renderMessage(c, mc.Update(f.Endpoints, "metric", "tags", "etime", "btime", "cause"))
+	mc.Category = f.Category
+
+	if f.Category == 1 {
+		renderMessage(c, mc.UpdateEndpoints(f.Endpoints, "metric", "tags", "etime", "btime", "cause"))
+	} else {
+		renderMessage(c, mc.UpdateNids(f.CurNidPaths, "metric", "tags", "etime", "btime", "cause"))
+	}
 }

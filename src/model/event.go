@@ -12,6 +12,7 @@ type Event struct {
 	Sid           int64     `json:"sid"`
 	Sname         string    `json:"sname"`
 	NodePath      string    `json:"node_path"`
+	CurNodePath   string    `json:"cur_node_path"`
 	Endpoint      string    `json:"endpoint"`
 	EndpointAlias string    `json:"endpoint_alias"`
 	Priority      int       `json:"priority"`
@@ -27,6 +28,7 @@ type Event struct {
 	Users         string    `json:"users"`
 	Groups        string    `json:"groups"`
 	Nid           int64     `json:"nid"`
+	CurNid        string    `json:"cur_nid"`
 	NeedUpgrade   int       `json:"need_upgrade"`
 	AlertUpgrade  string    `json:"alert_upgrade"`
 	RecvUserIDs   []int64   `json:"recv_user_ids" xorm:"-"`

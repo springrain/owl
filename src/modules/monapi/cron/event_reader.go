@@ -2,6 +2,7 @@ package cron
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/garyburd/redigo/redis"
@@ -75,20 +76,8 @@ func popEvent(queues []interface{}) (*model.Event, bool) {
 		return nil, false
 	}
 
-	// 如果nid和endpoint的对应关系不正确，直接丢弃该event
-	// 可能endpoint挪了节点
-	endpoint, err := model.EndpointGet("ident", event.Endpoint)
-	if err != nil {
-		logger.Errorf("model.EndpointGet fail, event: %+v, err: %v", event, err)
-		return nil, true
-	}
-
-	if endpoint == nil {
-		logger.Errorf("endpoint[%s] not found, event: %+v", event.Endpoint, event)
-		return nil, false
-	}
-
 	nodePath := ""
+	curNodePath := ""
 
 	node, err := model.NodeGet("id", stra.Nid)
 	if err != nil {
@@ -103,36 +92,73 @@ func popEvent(queues []interface{}) (*model.Event, bool) {
 
 	nodePath = node.Path
 
-	leafIds, err := node.LeafIds()
+	curNid, err := strconv.ParseInt(event.CurNid, 10, 64)
 	if err != nil {
-		logger.Errorf("get node leaf ids failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
+		logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
 		return nil, true
 	}
 
-	nodeIds, err := model.NodeIdsGetByEndpointId(endpoint.Id)
+	CurNode, err := model.NodeGet("id", curNid)
 	if err != nil {
-		logger.Errorf("get node_endpoint by endpoint_id fail: %v, event: %+v", err, event)
+		logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
 		return nil, true
 	}
 
-	if nodeIds == nil || len(nodeIds) == 0 {
-		logger.Errorf("endpoint[%s] not bind any node, event: %+v", event.Endpoint, event)
+	if CurNode == nil {
+		logger.Errorf("get cur_node by id return nil, node id: %v, event: %+v", stra.Nid, event)
 		return nil, false
 	}
 
-	has = false
-	for i := 0; i < len(nodeIds); i++ {
-		for j := 0; j < len(leafIds); j++ {
-			if nodeIds[i] == leafIds[j] {
-				has = true
-				break
+	curNodePath = CurNode.Path
+
+	if stra.Category == 1 {
+		// 设备相关对endpoint的校验
+		// 如果nid和endpoint的对应关系不正确，直接丢弃该event
+		// 可能endpoint挪了节点
+		endpoint, err := model.EndpointGet("ident", event.Endpoint)
+		if err != nil {
+			logger.Errorf("model.EndpointGet fail, event: %+v, err: %v", event, err)
+			return nil, true
+		}
+
+		if endpoint == nil {
+			logger.Errorf("endpoint[%s] not found, event: %+v", event.Endpoint, event)
+			return nil, false
+		}
+
+		leafIds, err := node.LeafIds()
+		if err != nil {
+			logger.Errorf("get node leaf ids failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
+			return nil, true
+		}
+
+		nodeIds, err := model.NodeIdsGetByEndpointId(endpoint.Id)
+		if err != nil {
+			logger.Errorf("get node_endpoint by endpoint_id fail: %v, event: %+v", err, event)
+			return nil, true
+		}
+
+		if nodeIds == nil || len(nodeIds) == 0 {
+			logger.Errorf("endpoint[%s] not bind any node, event: %+v", event.Endpoint, event)
+			return nil, false
+		}
+
+		has = false
+		for i := 0; i < len(nodeIds); i++ {
+			for j := 0; j < len(leafIds); j++ {
+				if nodeIds[i] == leafIds[j] {
+					has = true
+					break
+				}
 			}
 		}
-	}
 
-	if !has {
-		logger.Errorf("endpoint(%s) not match nid(%v), event: %+v", event.Endpoint, stra.Nid, event)
-		return nil, false
+		if !has {
+			logger.Errorf("endpoint(%s) not match nid(%v), event: %+v", event.Endpoint, stra.Nid, event)
+			return nil, false
+		}
+
+		event.EndpointAlias = endpoint.Alias
 	}
 
 	users, err := json.Marshal(stra.NotifyUser)
@@ -155,13 +181,13 @@ func popEvent(queues []interface{}) (*model.Event, bool) {
 
 	// 补齐event中的字段
 	event.Sname = stra.Name
-	event.EndpointAlias = endpoint.Alias
 	event.Category = stra.Category
 	event.Priority = stra.Priority
 	event.Nid = stra.Nid
 	event.Users = string(users)
 	event.Groups = string(groups)
 	event.NodePath = nodePath
+	event.CurNodePath = curNodePath
 	event.NeedUpgrade = stra.NeedUpgrade
 	event.AlertUpgrade = alertUpgrade
 	err = model.SaveEvent(event)
@@ -181,12 +207,14 @@ func popEvent(queues []interface{}) (*model.Event, bool) {
 		eventCur.Category = stra.Category
 		eventCur.Priority = stra.Priority
 		eventCur.Nid = stra.Nid
+		eventCur.CurNid = event.CurNid
 		eventCur.Users = string(users)
 		eventCur.Groups = string(groups)
 		eventCur.NodePath = nodePath
+		eventCur.CurNodePath = curNodePath
 		eventCur.NeedUpgrade = stra.NeedUpgrade
 		eventCur.AlertUpgrade = alertUpgrade
-		eventCur.EndpointAlias = endpoint.Alias
+		eventCur.EndpointAlias = event.EndpointAlias
 		eventCur.Status = 0
 		eventCur.Claimants = "[]"
 		err = model.SaveEventCur(eventCur)

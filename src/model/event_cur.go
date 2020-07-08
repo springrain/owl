@@ -17,6 +17,7 @@ type EventCur struct {
 	Sid           int64     `json:"sid"`
 	Sname         string    `json:"sname"`
 	NodePath      string    `json:"node_path"`
+	CurNodePath   string    `json:"cur_node_path"`
 	Endpoint      string    `json:"endpoint"`
 	EndpointAlias string    `json:"endpoint_alias"`
 	Priority      int       `json:"priority"`
@@ -32,6 +33,7 @@ type EventCur struct {
 	Users         string    `json:"users"`
 	Groups        string    `json:"groups"`
 	Nid           int64     `json:"nid"`
+	CurNid        string    `json:"cur_nid"`
 	IgnoreAlert   int       `json:"ignore_alert"`
 	Claimants     string    `json:"claimants"`
 	NeedUpgrade   int       `json:"need_upgrade"`
