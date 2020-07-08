@@ -42,25 +42,49 @@ func syncStras() {
 	}
 	strasMap := make(map[string][]*model.Stra)
 	for _, stra := range stras {
-		//增加叶子节点nid
-		stra.LeafNids, err = GetLeafNids(stra.Nid, stra.ExclNid)
-		if err != nil {
-			logger.Warningf("get LeafNids err:%v %v", err, stra)
-			continue
-		}
 
-		//设备相关
-		endpoints, err := model.EndpointUnderLeafs(stra.LeafNids)
-		if err != nil {
-			logger.Warningf("get endpoints err:%v %v", err, stra)
-			continue
-		}
+		if stra.Category == 1 {
+			//增加叶子节点nid
+			stra.LeafNids, err = GetLeafNids(stra.Nid, stra.ExclNid)
+			if err != nil {
+				logger.Warningf("get LeafNids err:%v %v", err, stra)
+				continue
+			}
 
-		for _, e := range endpoints {
-			stra.Endpoints = append(stra.Endpoints, e.Ident)
-		}
+			//设备相关
+			endpoints, err := model.EndpointUnderLeafs(stra.LeafNids)
+			if err != nil {
+				logger.Warningf("get endpoints err:%v %v", err, stra)
+				continue
+			}
 
-		//设备无关
+			for _, e := range endpoints {
+				stra.Endpoints = append(stra.Endpoints, e.Ident)
+			}
+		} else {
+			needChildNids := true
+			for _, e := range stra.Exprs {
+				if e.Metric == "nodata" {
+					needChildNids = false
+					break
+				}
+			}
+
+			//只有非nodata的告警策略，才支持告警策略继承，否则nodata会有误报
+			if needChildNids {
+				nids, err := GetLeafNids(stra.Nid, stra.ExclNid, false)
+				if err != nil {
+					logger.Warningf("get LeafNids err:%v %v", err, stra)
+					continue
+				}
+
+				for _, nid := range nids {
+					stra.Nids = append(stra.Nids, strconv.FormatInt(nid, 10))
+				}
+			}
+
+			stra.Nids = append(stra.Nids, strconv.FormatInt(stra.Nid, 10))
+		}
 
 		node, err := JudgeHashRing.GetNode(strconv.FormatInt(stra.Id, 10))
 		if err != nil {
@@ -214,7 +238,7 @@ func syncCollects() {
 	CollectCache.SetAll(collectMap)
 }
 
-func GetLeafNids(nid int64, exclNid []int64) ([]int64, error) {
+func GetLeafNids(nid int64, exclNid []int64, onlyLeaf ...bool) ([]int64, error) {
 	leafIds := []int64{}
 	idsMap := make(map[int64]bool)
 	node, err := model.NodeGet("id", nid)
@@ -226,7 +250,12 @@ func GetLeafNids(nid int64, exclNid []int64) ([]int64, error) {
 		return nil, fmt.Errorf("no such node[%d]", nid)
 	}
 
-	ids, err := node.LeafIds()
+	ol := true
+	if len(onlyLeaf) > 0 && !onlyLeaf[0] {
+		ol = false
+	}
+
+	ids, err := node.LeafIds(ol)
 	if err != nil {
 		return leafIds, err
 	}

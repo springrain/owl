@@ -223,24 +223,20 @@ func (n *Node) Unbind(hostIds []int64) error {
 	return nil
 }
 
-func (n *Node) LeafIds() ([]int64, error) {
+func (n *Node) LeafIds(OnlyLeaf ...bool) ([]int64, error) {
 	if n.Leaf == 1 {
 		return []int64{n.Id}, nil
 	}
 
-	var nodes []Node
-	err := DB["mon"].Where("path like ? and leaf=1", n.Path+".%").Find(&nodes)
-	if err != nil {
-		return []int64{}, err
+	var ids []int64
+	var err error
+	if len(OnlyLeaf) > 0 && !OnlyLeaf[0] {
+		err = DB["mon"].Table(new(Node)).Where("path like ?", n.Path+".%").Select("id").Find(&ids)
+	} else {
+		err = DB["mon"].Table(new(Node)).Where("path like ? and leaf = 1", n.Path+".%").Select("id").Find(&ids)
 	}
 
-	cnt := len(nodes)
-	arr := make([]int64, 0, cnt)
-	for i := 0; i < cnt; i++ {
-		arr = append(arr, nodes[i].Id)
-	}
-
-	return arr, nil
+	return ids, err
 }
 
 func (n *Node) Pids() ([]int64, error) {
