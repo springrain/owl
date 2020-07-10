@@ -23,11 +23,11 @@ type SeriesQuerySection struct {
 	IndexCallTimeout int    `json:"indexCallTimeout"` // 请求超时
 }
 
-func Init(cfg SeriesQuerySection) {
+func Init(cfg SeriesQuerySection, hbsMod string) {
 	Config = cfg
 	TransferConnPools = pools.NewConnPools(
 		Config.MaxConn, Config.MaxIdle, Config.ConnTimeout, Config.CallTimeout, address.GetRPCAddresses("transfer"),
 	)
 
-	go GetIndexLoop()
+	go GetIndexLoop(hbsMod)
 }

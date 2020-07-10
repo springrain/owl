@@ -30,17 +30,17 @@ func (i *IndexAddrs) Get() []string {
 	return i.Data
 }
 
-func GetIndexLoop() {
+func GetIndexLoop(hbsMod string) {
 	t1 := time.NewTicker(time.Duration(9) * time.Second)
-	GetIndex()
+	GetIndex(hbsMod)
 	for {
 		<-t1.C
-		GetIndex()
+		GetIndex(hbsMod)
 	}
 }
 
-func GetIndex() {
-	instances, err := report.GetAlive("index", "monapi")
+func GetIndex(hbsMod string) {
+	instances, err := report.GetAlive("index", hbsMod)
 	if err != nil {
 		stats.Counter.Set("get.index.err", 1)
 		logger.Warningf("get index list err:%v", err)

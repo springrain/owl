@@ -66,7 +66,7 @@ func main() {
 	tlogger.Init(cfg.Logger)
 	go stats.Init("n9e.judge")
 
-	query.Init(cfg.Query)
+	query.Init(cfg.Query, "monapi")
 	redi.Init(cfg.Redis)
 
 	cache.InitHistoryBigMap()
