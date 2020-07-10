@@ -35,12 +35,22 @@ func FetchData(inputs []dataobj.QueryData) []*dataobj.TsdbQueryResponse {
 	}()
 
 	for _, input := range inputs {
-		for _, endpoint := range input.Endpoints {
-			for _, counter := range input.Counters {
-				worker <- struct{}{}
-				go fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker, dataChan)
+		if len(input.Nids) > 0 {
+			for _, nid := range input.Nids {
+				for _, counter := range input.Counters {
+					worker <- struct{}{}
+					go fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
+				}
+			}
+		} else {
+			for _, endpoint := range input.Endpoints {
+				for _, counter := range input.Counters {
+					worker <- struct{}{}
+					go fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
+				}
 			}
 		}
+
 	}
 
 	// 等待所有 goroutine 执行完成
@@ -69,24 +79,48 @@ func FetchDataForUI(input dataobj.QueryDataForUI) []*dataobj.TsdbQueryResponse {
 		}
 	}()
 
-	for _, endpoint := range input.Endpoints {
-		if len(input.Tags) == 0 {
-			counter, err := GetCounter(input.Metric, "", nil)
-			if err != nil {
-				logger.Warningf("get counter error: %+v", err)
-				continue
-			}
-			worker <- struct{}{}
-			go fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker, dataChan)
-		} else {
-			for _, tag := range input.Tags {
-				counter, err := GetCounter(input.Metric, tag, nil)
+	if len(input.Nids) > 0 {
+		for _, nid := range input.Nids {
+			if len(input.Tags) == 0 {
+				counter, err := GetCounter(input.Metric, "", nil)
 				if err != nil {
 					logger.Warningf("get counter error: %+v", err)
 					continue
 				}
 				worker <- struct{}{}
-				go fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker, dataChan)
+				go fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
+			} else {
+				for _, tag := range input.Tags {
+					counter, err := GetCounter(input.Metric, tag, nil)
+					if err != nil {
+						logger.Warningf("get counter error: %+v", err)
+						continue
+					}
+					worker <- struct{}{}
+					go fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
+				}
+			}
+		}
+	} else {
+		for _, endpoint := range input.Endpoints {
+			if len(input.Tags) == 0 {
+				counter, err := GetCounter(input.Metric, "", nil)
+				if err != nil {
+					logger.Warningf("get counter error: %+v", err)
+					continue
+				}
+				worker <- struct{}{}
+				go fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
+			} else {
+				for _, tag := range input.Tags {
+					counter, err := GetCounter(input.Metric, tag, nil)
+					if err != nil {
+						logger.Warningf("get counter error: %+v", err)
+						continue
+					}
+					worker <- struct{}{}
+					go fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
+				}
 			}
 		}
 	}
@@ -168,16 +202,20 @@ func GetCounter(metric, tag string, tagMap map[string]string) (counter string, e
 	return
 }
 
-func fetchDataSync(start, end int64, consolFun, endpoint, counter string, step int, worker chan struct{}, dataChan chan *dataobj.TsdbQueryResponse) {
+func fetchDataSync(start, end int64, consolFun, nid, endpoint, counter string, step int, worker chan struct{}, dataChan chan *dataobj.TsdbQueryResponse) {
 	defer func() {
 		<-worker
 	}()
 	stats.Counter.Set("query.tsdb", 1)
+	if nid != "" {
+		endpoint = dataobj.NidToEndpoint(nid)
+	}
 
 	data, err := fetchData(start, end, consolFun, endpoint, counter, step)
 	if err != nil {
 		logger.Warningf("fetch tsdb data error: %+v", err)
 		stats.Counter.Set("query.data.err", 1)
+		data.Nid = nid
 		data.Endpoint = endpoint
 		data.Counter = counter
 		data.Step = step
