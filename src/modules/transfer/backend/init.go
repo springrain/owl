@@ -60,7 +60,7 @@ type BackendSection struct {
 
 	Replicas    int                     `yaml:"replicas"`
 	Cluster     map[string]string       `yaml:"cluster"`
-	ClusterList map[string]*ClusterNode `json:"clusterList"`
+	ClusterList map[string]*ClusterNode `yaml:"clusterList"`
 	Influxdb    InfluxdbSection         `yaml:"influxdb"`
 	OpenTsdb    OpenTsdbSection         `yaml:"opentsdb"`
 	Kafka       KafkaSection            `yaml:"kafka"`

@@ -244,6 +244,11 @@ type GetIndexByFullTagsResp struct {
 	DsType    string   `json:"dstype"`
 }
 
+type FullmathResp struct {
+	List  []GetIndexByFullTagsResp `json:"list"`
+	Count int                      `json:"count"`
+}
+
 func GetIndexByFullTags(c *gin.Context) {
 	stats.Counter.Set("counter.qp10s", 1)
 	recv := make([]GetIndexByFullTagsRecv, 0)
@@ -251,8 +256,9 @@ func GetIndexByFullTags(c *gin.Context) {
 
 	tagFilter := make(map[string]struct{})
 	tagsList := make([]string, 0)
+	counterCount := 0
 
-	var resp []GetIndexByFullTagsResp
+	var resp FullmathResp
 	for _, r := range recv {
 		var keys []string
 		var indexDB *cache.EndpointIndexMap
@@ -304,6 +310,10 @@ func GetIndexByFullTags(c *gin.Context) {
 			tagPairs := cache.GetSortTags(cache.TagPairToMap(tagkv))
 			tags := cache.GetAllCounter(tagPairs)
 
+			if len(tags) == 0 {
+				counterCount++
+			}
+
 			for _, tag := range tags {
 				// 校验和 tag 有关的 counter 是否存在
 				// 如果一个指标，比如 port.listen 有 name=uic,port=8056 和 name=hsp,port=8002。避免产生 4 个曲线
@@ -313,6 +323,7 @@ func GetIndexByFullTags(c *gin.Context) {
 					continue
 				}
 
+				counterCount++
 				if _, exists := tagFilter[tag]; !exists {
 					tagsList = append(tagsList, tag)
 					tagFilter[tag] = struct{}{}
@@ -320,7 +331,7 @@ func GetIndexByFullTags(c *gin.Context) {
 			}
 		}
 
-		resp = append(resp, GetIndexByFullTagsResp{
+		resp.List = append(resp.List, GetIndexByFullTagsResp{
 			Endpoints: r.Endpoints,
 			Nids:      r.Nids,
 			Metric:    r.Metric,
@@ -330,6 +341,7 @@ func GetIndexByFullTags(c *gin.Context) {
 		})
 	}
 
+	resp.Count = counterCount
 	render.Data(c, resp, nil)
 }
 
@@ -396,14 +408,21 @@ func GetIndexByClude(c *gin.Context) {
 
 			metricIndex, exists := indexDB.GetMetricIndex(key, metric)
 			if !exists {
-				resp = append(resp, XcludeResp{
-					Endpoint: key,
-					Nid:      key,
-					Metric:   metric,
-					Tags:     tagList,
-					Step:     step,
-					DsType:   dsType,
-				})
+				tmp := XcludeResp{
+					Metric: metric,
+					Tags:   tagList,
+					Step:   step,
+					DsType: dsType,
+				}
+
+				if len(r.Nids) > 0 {
+					tmp.Nid = key
+				} else {
+					tmp.Endpoint = key
+				}
+
+				resp = append(resp, tmp)
+
 				logger.Debugf("can't found index by key:%s metric:%v\n", key, metric)
 				stats.Counter.Set("xclude.miss", 1)
 
@@ -427,14 +446,20 @@ func GetIndexByClude(c *gin.Context) {
 				for counter := range counterMap {
 					tagList = append(tagList, counter)
 				}
-				resp = append(resp, XcludeResp{
-					Endpoint: key,
-					Nid:      key,
-					Metric:   metric,
-					Tags:     tagList,
-					Step:     step,
-					DsType:   dsType,
-				})
+				tmp := XcludeResp{
+					Metric: metric,
+					Tags:   tagList,
+					Step:   step,
+					DsType: dsType,
+				}
+
+				if len(r.Nids) > 0 {
+					tmp.Nid = key
+				} else {
+					tmp.Endpoint = key
+				}
+
+				resp = append(resp, tmp)
 				continue
 			} else {
 				tags, err = indexDB.GetIndexByClude(key, metric, includeList, excludeList)

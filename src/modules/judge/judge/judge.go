@@ -87,6 +87,8 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 
 	if exp.Func == "nodata" {
 		info += fmt.Sprintf(" %s (%s,%ds)", exp.Metric, exp.Func, stra.AlertDur)
+	} else if exp.Func == "stddev" {
+		info += fmt.Sprintf(" %s (%s,%ds) %v", exp.Metric, exp.Func, stra.AlertDur, exp.Params)
 	} else {
 		info += fmt.Sprintf(" %s(%s,%ds) %s %v", exp.Metric, exp.Func, stra.AlertDur, exp.Eopt, exp.Threshold)
 	}
@@ -173,8 +175,11 @@ func Judge(stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryDat
 				return
 			}
 			for i := range respData {
-				firstItem.Endpoint = respData[i].Endpoint
-				firstItem.Nid = respData[i].Nid
+				if respData[i].Nid != "" {
+					firstItem.Nid = respData[i].Nid
+				} else if respData[i].Endpoint != "" {
+					firstItem.Endpoint = respData[i].Endpoint
+				}
 				firstItem.Tags = getTags(respData[i].Counter)
 				firstItem.Step = respData[i].Step
 				Judge(stra, exps[1:], dataobj.RRDData2HistoryData(respData[i].Values), firstItem, now, history, info, value, extra, status)
@@ -265,7 +270,13 @@ func GetData(stra *model.Stra, exp model.Exp, firstItem *dataobj.JudgeItem, now 
 
 		reqs = append(reqs, queryParam)
 	} else if firstItem != nil { //点驱动告警策略的场景
-		reqs = GetReqs(stra, exp.Metric, []string{firstItem.Nid}, []string{firstItem.Endpoint}, now)
+		var nids, endpoints []string
+		if firstItem.Nid != "" {
+			nids = []string{firstItem.Nid}
+		} else if firstItem.Endpoint != "" {
+			endpoints = []string{firstItem.Endpoint}
+		}
+		reqs = GetReqs(stra, exp.Metric, nids, endpoints, now)
 	} else { //nodata的场景
 		reqs = GetReqs(stra, exp.Metric, stra.Nids, stra.Endpoints, now)
 	}
@@ -292,6 +303,7 @@ func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int6
 		Endpoints: endpoints,
 		Metric:    metric,
 	}
+
 	for _, tag := range stra.Tags {
 		if tag.Topt == "=" {
 			req.Include = append(req.Include, query.XCludeStruct{
@@ -328,7 +340,7 @@ func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int6
 			lostSeries = append(lostSeries, s)
 		} else {
 			if len(index.Tags) == 0 {
-				hash := str.MD5(index.Endpoint, index.Metric, "")
+				hash := getHash(index, "")
 				s := cache.Series{
 					Nid:      index.Nid,
 					Endpoint: index.Endpoint,
@@ -341,7 +353,7 @@ func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int6
 				cache.SeriesMap.Set(stra.Id, hash, s)
 			} else {
 				for _, tag := range index.Tags {
-					hash := str.MD5(index.Endpoint, index.Metric, tag)
+					hash := getHash(index, tag)
 					s := cache.Series{
 						Nid:      index.Nid,
 						Endpoint: index.Endpoint,
@@ -484,4 +496,12 @@ func getTags(counter string) (tags string) {
 		return ""
 	}
 	return counter[idx+1:]
+}
+
+func getHash(idx query.IndexData, tag string) string {
+	if idx.Nid != "" {
+		return str.MD5(idx.Nid, idx.Metric, tag)
+	}
+
+	return str.MD5(idx.Endpoint, idx.Metric, tag)
 }

@@ -39,7 +39,7 @@ func nodataJudge() {
 	for _, stra := range stras {
 		//nodata处理
 		if len(stra.Endpoints) == 0 && len(stra.Nids) == 0 {
-			logger.Warningf("stra:%+v endpoints or nids is null", stra)
+			logger.Debugf("stra:%+v endpoints or nids is null", stra)
 			continue
 		}
 

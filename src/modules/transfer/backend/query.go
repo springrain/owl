@@ -207,6 +207,7 @@ func fetchDataSync(start, end int64, consolFun, nid, endpoint, counter string, s
 		<-worker
 	}()
 	stats.Counter.Set("query.tsdb", 1)
+
 	if nid != "" {
 		endpoint = dataobj.NidToEndpoint(nid)
 	}
@@ -215,11 +216,17 @@ func fetchDataSync(start, end int64, consolFun, nid, endpoint, counter string, s
 	if err != nil {
 		logger.Warningf("fetch tsdb data error: %+v", err)
 		stats.Counter.Set("query.data.err", 1)
-		data.Nid = nid
-		data.Endpoint = endpoint
 		data.Counter = counter
 		data.Step = step
 	}
+
+	if nid != "" {
+		data.Nid = nid
+		data.Endpoint = ""
+	} else {
+		data.Endpoint = endpoint
+	}
+
 	dataChan <- data
 }
 

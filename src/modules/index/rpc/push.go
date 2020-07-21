@@ -36,7 +36,6 @@ func push(args []*dataobj.IndexModel, reply *dataobj.IndexResp) {
 		logger.Debugf("<---index %v", item)
 
 		if item.Nid != "" {
-			item.Endpoint = item.Nid
 			cache.NidIndexDB.Push(*item, now)
 		} else {
 			cache.IndexDB.Push(*item, now)

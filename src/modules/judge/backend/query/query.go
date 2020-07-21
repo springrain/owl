@@ -76,11 +76,10 @@ func QueryFromMem(reqs []*dataobj.QueryData, sid int64) ([]*dataobj.TsdbQueryRes
 					}
 
 					item := &dataobj.JudgeItem{
-						Nid:      nid,
-						Endpoint: dataobj.NidToEndpoint(nid),
-						Metric:   metric,
-						TagsMap:  tagsMap,
-						Sid:      sid,
+						Nid:     nid,
+						Metric:  metric,
+						TagsMap: tagsMap,
+						Sid:     sid,
 					}
 
 					pk := item.MD5()
@@ -161,13 +160,20 @@ func NewQueryRequest(nid, endpoint, metric string, tagsMap map[string]string,
 	} else {
 		counter = metric + "/" + str.SortedTags(tagsMap)
 	}
+	var nids, endpoints []string
+	if nid != "" {
+		nids = []string{nid}
+	} else if endpoint != "" {
+		endpoints = []string{endpoint}
+	}
+
 	return &dataobj.QueryData{
 		Start:      start,
 		End:        end,
 		Step:       step,
 		ConsolFunc: "AVERAGE", // 硬编码
-		Nids:       []string{nid},
-		Endpoints:  []string{endpoint},
+		Nids:       nids,
+		Endpoints:  endpoints,
 		Counters:   []string{counter},
 	}, nil
 }
