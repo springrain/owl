@@ -257,17 +257,21 @@ func GetIndexByFullTags(c *gin.Context) {
 	tagFilter := make(map[string]struct{})
 	tagsList := make([]string, 0)
 	counterCount := 0
-
+	var endpoints, nids []string
+	var mod string
 	var resp FullmathResp
+
 	for _, r := range recv {
 		var keys []string
 		var indexDB *cache.EndpointIndexMap
 		if len(r.Nids) > 0 {
+			mod = "nid"
 			indexDB = cache.NidIndexDB
 			for _, nid := range r.Nids {
 				keys = append(keys, nid)
 			}
 		} else {
+			mod = "endpoint"
 			indexDB = cache.IndexDB
 			for _, endpoint := range r.Endpoints {
 				keys = append(keys, endpoint)
@@ -296,6 +300,11 @@ func GetIndexByFullTags(c *gin.Context) {
 				logger.Debugf("can't found index by key:%s metric:%v\n", key, metric)
 				stats.Counter.Set("query.counter.miss", 1)
 				continue
+			}
+			if mod == "nid" {
+				nids = append(nids, key)
+			} else {
+				endpoints = append(endpoints, key)
 			}
 
 			metricIndex.RLock()
@@ -332,8 +341,8 @@ func GetIndexByFullTags(c *gin.Context) {
 		}
 
 		resp.List = append(resp.List, GetIndexByFullTagsResp{
-			Endpoints: r.Endpoints,
-			Nids:      r.Nids,
+			Endpoints: endpoints,
+			Nids:      nids,
 			Metric:    r.Metric,
 			Tags:      tagsList,
 			Step:      step,
