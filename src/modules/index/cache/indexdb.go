@@ -176,16 +176,17 @@ func Persist(mode string) error {
 	} else {
 		tmpDir = fmt.Sprintf("%s/%s", indexFileDir, "tmp")
 	}
-	if err := os.RemoveAll(tmpDir); err != nil {
-		return err
-	}
-	// create tmp directory
-	if err := os.MkdirAll(tmpDir, 0777); err != nil {
-		return err
-	}
 
 	// write endpoint index data to disk
 	endpointDir := tmpDir + "/endpoint"
+	if err := os.RemoveAll(endpointDir); err != nil {
+		return err
+	}
+	// create tmp directory
+	if err := os.MkdirAll(endpointDir, 0777); err != nil {
+		return err
+	}
+
 	endpoints := IndexDB.GetEndpoints()
 	epLength := len(endpoints)
 	logger.Infof("save index data to disk[num:%d][mode:%s]\n", epLength, mode)
@@ -198,7 +199,15 @@ func Persist(mode string) error {
 		}
 	}
 
-	nidDir := tmpDir + "/endpoint"
+	nidDir := tmpDir + "/nid"
+	if err := os.RemoveAll(nidDir); err != nil {
+		return err
+	}
+	// create tmp directory
+	if err := os.MkdirAll(nidDir, 0777); err != nil {
+		return err
+	}
+
 	nids := NidIndexDB.GetEndpoints()
 	nidLength := len(nids)
 	logger.Infof("save index data to disk[num:%d][mode:%s]\n", nidLength, mode)

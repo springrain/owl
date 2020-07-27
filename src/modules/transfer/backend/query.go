@@ -141,9 +141,10 @@ func FetchDataForUI(input dataobj.QueryDataForUI) []*dataobj.TsdbQueryResponse {
 		// 没有聚合 tag, 或者曲线没有其他 tags, 直接所有曲线进行计算
 		if len(input.GroupKey) == 0 || getTags(resp[0].Counter) == "" {
 			aggrData := &dataobj.TsdbQueryResponse{
-				Start:  input.Start,
-				End:    input.End,
-				Values: calc.Compute(input.AggrFunc, resp),
+				Counter: input.AggrFunc,
+				Start:   input.Start,
+				End:     input.End,
+				Values:  calc.Compute(input.AggrFunc, resp),
 			}
 			aggrDatas = append(aggrDatas, aggrData)
 		} else {
@@ -155,7 +156,11 @@ func FetchDataForUI(input dataobj.QueryDataForUI) []*dataobj.TsdbQueryResponse {
 					logger.Warningf("split tag string error: %+v", err)
 					continue
 				}
-				tagsMap["endpoint"] = data.Endpoint
+				if data.Nid != "" {
+					tagsMap["node"] = data.Nid
+				} else {
+					tagsMap["endpoint"] = data.Endpoint
+				}
 
 				// 校验 GroupKey 是否在 tags 中
 				for _, key := range input.GroupKey {
@@ -174,6 +179,9 @@ func FetchDataForUI(input dataobj.QueryDataForUI) []*dataobj.TsdbQueryResponse {
 
 			// 有需要聚合的 tag 需要将 counter 带上
 			for counter, datas := range aggrCounter {
+				if counter != "" {
+					counter = "/" + input.AggrFunc + "," + counter
+				}
 				aggrData := &dataobj.TsdbQueryResponse{
 					Start:   input.Start,
 					End:     input.End,
