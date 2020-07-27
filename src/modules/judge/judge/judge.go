@@ -391,12 +391,17 @@ func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int6
 			Start:      start,
 			End:        now,
 			ConsolFunc: "AVERAGE", // 硬编码
-			Nids:       []string{series.Nid},
-			Endpoints:  []string{series.Endpoint},
 			Counters:   []string{counter},
 			Step:       series.Step,
 			DsType:     series.Dstype,
 		}
+
+		if series.Nid != "" {
+			queryParam.Nids = []string{series.Nid}
+		} else {
+			queryParam.Endpoints = []string{series.Endpoint}
+		}
+
 		reqs = append(reqs, queryParam)
 	}
 
@@ -409,12 +414,17 @@ func GetReqs(stra *model.Stra, metric string, nids, endpoints []string, now int6
 			Start:      start,
 			End:        now,
 			ConsolFunc: "AVERAGE", // 硬编码
-			Endpoints:  []string{series.Endpoint},
-			Nids:       []string{series.Nid},
 			Counters:   []string{counter},
 			Step:       series.Step,
 			DsType:     series.Dstype,
 		}
+
+		if series.Nid != "" {
+			queryParam.Nids = []string{series.Nid}
+		} else {
+			queryParam.Endpoints = []string{series.Endpoint}
+		}
+
 		reqs = append(reqs, queryParam)
 	}
 

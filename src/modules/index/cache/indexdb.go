@@ -194,7 +194,7 @@ func Persist(mode string) error {
 	for i, endpoint := range endpoints {
 		logger.Infof("sync [%s] to disk, [%d%%] complete\n", endpoint, int((float64(i)/float64(epLength))*100))
 
-		if err := WriteIndexToFile(endpointDir, endpoint); err != nil {
+		if err := WriteIndexToFile("endpoint", endpointDir, endpoint); err != nil {
 			logger.Errorf("write %s index to file err:%v\n", endpoint, err)
 		}
 	}
@@ -215,7 +215,7 @@ func Persist(mode string) error {
 	for i, nid := range nids {
 		logger.Infof("sync [%s] to disk, [%d%%] complete\n", nid, int((float64(i)/float64(nidLength))*100))
 
-		if err := WriteIndexToFile(nidDir, nid); err != nil {
+		if err := WriteIndexToFile("nid", nidDir, nid); err != nil {
 			logger.Errorf("write %s index to file err:%v\n", nid, err)
 		}
 	}
@@ -243,10 +243,19 @@ func Persist(mode string) error {
 	return nil
 }
 
-func WriteIndexToFile(indexDir, endpoint string) error {
-	metricIndexMap, exists := IndexDB.GetMetricIndexMap(endpoint)
-	if !exists || metricIndexMap == nil {
-		return fmt.Errorf("endpoint index doesn't found")
+func WriteIndexToFile(mod, indexDir, endpoint string) error {
+	var metricIndexMap *MetricIndexMap
+	var exists bool
+	if mod == "endpoint" {
+		metricIndexMap, exists = IndexDB.GetMetricIndexMap(endpoint)
+		if !exists || metricIndexMap == nil {
+			return fmt.Errorf("endpoint index doesn't found")
+		}
+	} else {
+		metricIndexMap, exists = NidIndexDB.GetMetricIndexMap(endpoint)
+		if !exists || metricIndexMap == nil {
+			return fmt.Errorf("endpoint index doesn't found")
+		}
 	}
 
 	metricIndexMap.RLock()
