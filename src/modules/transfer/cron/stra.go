@@ -80,8 +80,8 @@ func getStrategy() {
 			metric := exp.Metric
 
 			for _, nid := range stra.Nids {
-				key := str.PK(metric, nid) //TODO get straMap key， 此处需要优化
-				k1 := key[0:2]             //为了加快查找，增加一层 map，key 为计算出来的 hash 的前 2 位
+				key := str.MD5(nid, metric, "") //TODO get straMap key， 此处需要优化
+				k1 := key[0:2]                  //为了加快查找，增加一层 map，key 为计算出来的 hash 的前 2 位
 
 				if _, exists := straMap[k1]; !exists {
 					straMap[k1] = make(map[string][]*model.Stra)
@@ -97,8 +97,8 @@ func getStrategy() {
 			}
 
 			for _, endpoint := range stra.Endpoints {
-				key := str.PK(metric, endpoint) //TODO get straMap key， 此处需要优化
-				k1 := key[0:2]                  //为了加快查找，增加一层 map，key 为计算出来的 hash 的前 2 位
+				key := str.MD5(endpoint, metric, "") //TODO get straMap key， 此处需要优化
+				k1 := key[0:2]                       //为了加快查找，增加一层 map，key 为计算出来的 hash 的前 2 位
 
 				if _, exists := straMap[k1]; !exists {
 					straMap[k1] = make(map[string][]*model.Stra)

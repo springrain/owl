@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/didi/nightingale/src/modules/transfer/aggr"
 	"github.com/didi/nightingale/src/modules/transfer/backend"
 	"github.com/didi/nightingale/src/toolkits/logger"
 
@@ -19,6 +20,7 @@ type ConfYaml struct {
 	Backend backend.BackendSection `yaml:"backend"`
 	HTTP    HTTPSection            `yaml:"http"`
 	RPC     RPCSection             `yaml:"rpc"`
+	Aggr    aggr.AggrSection       `yaml:"aggr"`
 }
 
 type IndexSection struct {
@@ -91,6 +93,12 @@ func Parse(conf string) error {
 		"indexTimeout": 3000, //访问index超时时间，单位毫秒
 		"straPath":     "/api/portal/stras/effective?all=1",
 		"hbsMod":       "monapi",
+	})
+
+	viper.SetDefault("aggr", map[string]interface{}{
+		"enabled":    false,
+		"apiTimeout": 3000,
+		"apiPath":    "/api/mon/aggrs",
 	})
 
 	viper.SetDefault("backend.influxdb", map[string]interface{}{

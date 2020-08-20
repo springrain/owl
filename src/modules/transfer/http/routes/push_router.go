@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/didi/nightingale/src/dataobj"
+	"github.com/didi/nightingale/src/modules/transfer/aggr"
 	"github.com/didi/nightingale/src/modules/transfer/backend"
 	"github.com/didi/nightingale/src/toolkits/http/render"
 	"github.com/didi/nightingale/src/toolkits/stats"
@@ -46,6 +47,10 @@ func PushData(c *gin.Context) {
 
 	if backend.Config.Enabled {
 		backend.Push2JudgeSendQueue(metricValues)
+	}
+
+	if aggr.AggrConfig.Enabled {
+		go aggr.SendToAggr(metricValues)
 	}
 
 	if backend.Config.Influxdb.Enabled {

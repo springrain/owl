@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/didi/nightingale/src/modules/transfer/aggr"
 	"github.com/didi/nightingale/src/modules/transfer/backend"
 	"github.com/didi/nightingale/src/modules/transfer/config"
 	"github.com/didi/nightingale/src/modules/transfer/cron"
@@ -61,6 +62,7 @@ func main() {
 	tlogger.Init(cfg.Logger)
 	go stats.Init("n9e.transfer")
 
+	aggr.Init(cfg.Aggr)
 	backend.Init(cfg.Backend)
 	cron.Init()
 

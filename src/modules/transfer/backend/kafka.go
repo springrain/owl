@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Shopify/sarama"
-	"github.com/toolkits/pkg/logger"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/Shopify/sarama"
+	"github.com/toolkits/pkg/logger"
 )
 
 type KafkaData map[string]interface{}

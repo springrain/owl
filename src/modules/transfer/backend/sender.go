@@ -208,9 +208,9 @@ func Push2JudgeSendQueue(items []*dataobj.MetricValue) {
 	for _, item := range items {
 		var key string
 		if item.Nid != "" {
-			key = str.PK(item.Metric, item.Nid)
+			key = str.MD5(item.Nid, item.Metric, "")
 		} else {
-			key = str.PK(item.Metric, item.Endpoint)
+			key = str.MD5(item.Endpoint, item.Metric, "")
 		}
 		stras := cache.StraMap.GetByKey(key)
 

@@ -92,26 +92,26 @@ func popEvent(queues []interface{}) (*model.Event, bool) {
 
 	nodePath = node.Path
 
-	curNid, err := strconv.ParseInt(event.CurNid, 10, 64)
-	if err != nil {
-		logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
-		return nil, true
-	}
+	if stra.Category == 2 {
+		curNid, err := strconv.ParseInt(event.CurNid, 10, 64)
+		if err != nil {
+			logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
+			return nil, true
+		}
 
-	CurNode, err := model.NodeGet("id", curNid)
-	if err != nil {
-		logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
-		return nil, true
-	}
+		CurNode, err := model.NodeGet("id", curNid)
+		if err != nil {
+			logger.Errorf("get cur_node failed, node id: %v, event: %+v, err: %v", stra.Nid, event, err)
+			return nil, true
+		}
 
-	if CurNode == nil {
-		logger.Errorf("get cur_node by id return nil, node id: %v, event: %+v", stra.Nid, event)
-		return nil, false
-	}
+		if CurNode == nil {
+			logger.Errorf("get cur_node by id return nil, node id: %v, event: %+v", stra.Nid, event)
+			return nil, false
+		}
 
-	curNodePath = CurNode.Path
-
-	if stra.Category == 1 {
+		curNodePath = CurNode.Path
+	} else if stra.Category == 1 {
 		// 设备相关对endpoint的校验
 		// 如果nid和endpoint的对应关系不正确，直接丢弃该event
 		// 可能endpoint挪了节点

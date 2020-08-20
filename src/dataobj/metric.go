@@ -42,11 +42,6 @@ var bufferPool = sync.Pool{
 	},
 }
 
-func (m *MetricValue) String() string {
-	return fmt.Sprintf("<MetaData Endpoint:%s, Metric:%s, CounterType:%s Timestamp:%d, Step:%d, Value:%v, Tags:%v(%v)>",
-		m.Endpoint, m.Metric, m.CounterType, m.Timestamp, m.Step, m.ValueUntyped, m.Tags, m.TagsMap)
-}
-
 func (m *MetricValue) PK() string {
 	ret := bufferPool.Get().(*bytes.Buffer)
 	ret.Reset()
