@@ -3,13 +3,14 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"github.com/didi/nightingale/src/toolkits/identity"
-	"github.com/didi/nightingale/src/toolkits/report"
 	"strings"
 
+	"github.com/didi/nightingale/src/modules/transfer/aggr"
 	"github.com/didi/nightingale/src/modules/transfer/backend"
 	"github.com/didi/nightingale/src/modules/transfer/backend/tsdb"
+	"github.com/didi/nightingale/src/toolkits/identity"
 	"github.com/didi/nightingale/src/toolkits/logger"
+	"github.com/didi/nightingale/src/toolkits/report"
 
 	"github.com/spf13/viper"
 	"github.com/toolkits/pkg/file"
@@ -24,6 +25,7 @@ type ConfYaml struct {
 	RPC      RPCSection               `yaml:"rpc"`
 	Identity identity.IdentitySection `yaml:"identity"`
 	Report   report.ReportSection     `yaml:"report"`
+	Aggr     aggr.AggrSection         `yaml:"aggr"`
 }
 
 type IndexSection struct {
@@ -110,6 +112,12 @@ func Parse(conf string) error {
 		"callTimeout":  3000, //访问超时时间，单位毫秒
 		"indexTimeout": 3000, //访问index超时时间，单位毫秒
 		"replicas":     500,  //一致性hash虚拟节点
+	})
+
+	viper.SetDefault("aggr", map[string]interface{}{
+		"enabled":    false,
+		"apiTimeout": 3000,
+		"apiPath":    "/api/mon/aggrs",
 	})
 
 	viper.SetDefault("backend.influxdb", map[string]interface{}{

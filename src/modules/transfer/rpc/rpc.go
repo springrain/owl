@@ -18,6 +18,7 @@ import (
 type Transfer int
 
 func Start() {
+	go consumer()
 	addr := address.GetRPCListen("transfer")
 
 	server := rpc.NewServer()

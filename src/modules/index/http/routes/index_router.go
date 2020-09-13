@@ -2,6 +2,7 @@ package routes
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/didi/nightingale/src/modules/index/cache"
 	"github.com/didi/nightingale/src/toolkits/http/render"
@@ -260,6 +261,101 @@ func GetIndexByFullTags(c *gin.Context) {
 	var endpoints, nids []string
 	var mod string
 	var resp FullmathResp
+	var resp2 []GetIndexByFullTagsResp
+
+	if strings.Contains(c.GetHeader("Referer"), "ccp/admin") {
+		for _, r := range recv {
+			var keys []string
+			var indexDB *cache.EndpointIndexMap
+			if len(r.Nids) > 0 {
+				mod = "nid"
+				indexDB = cache.NidIndexDB
+				for _, nid := range r.Nids {
+					keys = append(keys, nid)
+				}
+			} else {
+				mod = "endpoint"
+				indexDB = cache.IndexDB
+				for _, endpoint := range r.Endpoints {
+					keys = append(keys, endpoint)
+				}
+			}
+
+			metric := r.Metric
+			tagkv := r.Tagkv
+			step := 0
+			dsType := ""
+
+			for _, key := range keys {
+				if key == "" {
+					logger.Debugf("invalid request: lack of key param:%v\n", r)
+					stats.Counter.Set("query.counter.miss", 1)
+					continue
+				}
+				if metric == "" {
+					logger.Debugf("invalid request: lack of metric param:%v\n", r)
+					stats.Counter.Set("query.counter.miss", 1)
+					continue
+				}
+
+				metricIndex, exists := indexDB.GetMetricIndex(key, metric)
+				if !exists {
+					logger.Debugf("can't found index by key:%s metric:%v\n", key, metric)
+					stats.Counter.Set("query.counter.miss", 1)
+					continue
+				}
+				if mod == "nid" {
+					nids = append(nids, key)
+				} else {
+					endpoints = append(endpoints, key)
+				}
+
+				metricIndex.RLock()
+				if step == 0 || dsType == "" {
+					step = metricIndex.Step
+					dsType = metricIndex.DsType
+				}
+
+				countersMap := metricIndex.CounterMap.GetCounters()
+				metricIndex.RUnlock()
+
+				tagPairs := cache.GetSortTags(cache.TagPairToMap(tagkv))
+				tags := cache.GetAllCounter(tagPairs)
+
+				if len(tags) == 0 {
+					counterCount++
+				}
+
+				for _, tag := range tags {
+					// 校验和 tag 有关的 counter 是否存在
+					// 如果一个指标，比如 port.listen 有 name=uic,port=8056 和 name=hsp,port=8002。避免产生 4 个曲线
+					if _, exists := countersMap[tag]; !exists {
+						stats.Counter.Set("query.counter.miss", 1)
+						logger.Debugf("can't found counters by key:%s metric:%v tags:%v\n", key, metric, tag)
+						continue
+					}
+
+					counterCount++
+					if _, exists := tagFilter[tag]; !exists {
+						tagsList = append(tagsList, tag)
+						tagFilter[tag] = struct{}{}
+					}
+				}
+			}
+
+			resp2 = append(resp2, GetIndexByFullTagsResp{
+				Endpoints: endpoints,
+				Nids:      nids,
+				Metric:    r.Metric,
+				Tags:      tagsList,
+				Step:      step,
+				DsType:    dsType,
+			})
+
+			render.Data(c, resp2, nil)
+			return
+		}
+	}
 
 	for _, r := range recv {
 		var keys []string
