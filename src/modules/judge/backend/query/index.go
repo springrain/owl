@@ -40,7 +40,7 @@ func GetIndexLoop(hbsMod string) {
 }
 
 func GetIndex(hbsMod string) {
-	instances, err := report.GetAlive("index", hbsMod)
+	instances, err := report.GetAlive(Config.IndexMod, hbsMod)
 	if err != nil {
 		stats.Counter.Set("get.index.err", 1)
 		logger.Warningf("get index list err:%v", err)

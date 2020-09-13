@@ -11,10 +11,6 @@ import (
 	"github.com/didi/nightingale/src/toolkits/stats"
 )
 
-type QueryDataReq struct {
-	queryData []dataobj.QueryData
-}
-
 func QueryData(c *gin.Context) {
 	stats.Counter.Set("data.api.qp10s", 1)
 
@@ -25,9 +21,9 @@ func QueryData(c *gin.Context) {
 		return
 	}
 
-	var queryDataReq QueryDataReq
-	errors.Dangerous(c.ShouldBindJSON(&queryDataReq))
-	resp := dataSource.QueryData(queryDataReq.queryData)
+	var input []dataobj.QueryData
+	errors.Dangerous(c.ShouldBindJSON(&input))
+	resp := dataSource.QueryData(input)
 	render.Data(c, resp, nil)
 }
 

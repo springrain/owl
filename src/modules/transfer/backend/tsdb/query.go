@@ -33,22 +33,13 @@ func (tsdb *TsdbDataSource) QueryData(inputs []dataobj.QueryData) []*dataobj.Tsd
 	}()
 
 	for _, input := range inputs {
-		if len(input.Nids) > 0 {
-			for _, nid := range input.Nids {
-				for _, counter := range input.Counters {
-					worker <- struct{}{}
-					go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
-				}
-			}
-		} else {
-			for _, endpoint := range input.Endpoints {
-				for _, counter := range input.Counters {
-					worker <- struct{}{}
-					go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
-				}
+		for _, endpoint := range input.Endpoints {
+			for _, counter := range input.Counters {
+				worker <- struct{}{}
+				go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker,
+					dataChan)
 			}
 		}
-
 	}
 
 	// 等待所有 goroutine 执行完成
@@ -80,48 +71,26 @@ func (tsdb *TsdbDataSource) QueryDataForUI(input dataobj.QueryDataForUI) []*data
 		}
 	}()
 
-	if len(input.Nids) > 0 {
-		for _, nid := range input.Nids {
-			if len(input.Tags) == 0 {
-				counter, err := dataobj.GetCounter(input.Metric, "", nil)
-				if err != nil {
-					logger.Warningf("get counter error: %+v", err)
-					continue
-				}
-				worker <- struct{}{}
-				go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
-			} else {
-				for _, tag := range input.Tags {
-					counter, err := dataobj.GetCounter(input.Metric, tag, nil)
-					if err != nil {
-						logger.Warningf("get counter error: %+v", err)
-						continue
-					}
-					worker <- struct{}{}
-					go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, nid, "", counter, input.Step, worker, dataChan)
-				}
+	for _, endpoint := range input.Endpoints {
+		if len(input.Tags) == 0 {
+			counter, err := dataobj.GetCounter(input.Metric, "", nil)
+			if err != nil {
+				logger.Warningf("get counter error: %+v", err)
+				continue
 			}
-		}
-	} else {
-		for _, endpoint := range input.Endpoints {
-			if len(input.Tags) == 0 {
-				counter, err := dataobj.GetCounter(input.Metric, "", nil)
+			worker <- struct{}{}
+			go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker,
+				dataChan)
+		} else {
+			for _, tag := range input.Tags {
+				counter, err := dataobj.GetCounter(input.Metric, tag, nil)
 				if err != nil {
 					logger.Warningf("get counter error: %+v", err)
 					continue
 				}
 				worker <- struct{}{}
-				go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
-			} else {
-				for _, tag := range input.Tags {
-					counter, err := dataobj.GetCounter(input.Metric, tag, nil)
-					if err != nil {
-						logger.Warningf("get counter error: %+v", err)
-						continue
-					}
-					worker <- struct{}{}
-					go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, "", endpoint, counter, input.Step, worker, dataChan)
-				}
+				go tsdb.fetchDataSync(input.Start, input.End, input.ConsolFunc, endpoint, counter, input.Step, worker,
+					dataChan)
 			}
 		}
 	}
@@ -142,10 +111,9 @@ func (tsdb *TsdbDataSource) QueryDataForUI(input dataobj.QueryDataForUI) []*data
 		// 没有聚合 tag, 或者曲线没有其他 tags, 直接所有曲线进行计算
 		if len(input.GroupKey) == 0 || getTags(resp[0].Counter) == "" {
 			aggrData := &dataobj.TsdbQueryResponse{
-				Counter: input.AggrFunc,
-				Start:   input.Start,
-				End:     input.End,
-				Values:  calc.Compute(input.AggrFunc, resp),
+				Start:  input.Start,
+				End:    input.End,
+				Values: calc.Compute(input.AggrFunc, resp),
 			}
 			aggrDatas = append(aggrDatas, aggrData)
 		} else {
@@ -157,11 +125,7 @@ func (tsdb *TsdbDataSource) QueryDataForUI(input dataobj.QueryDataForUI) []*data
 					logger.Warningf("split tag string error: %+v", err)
 					continue
 				}
-				if data.Nid != "" {
-					tagsMap["node"] = data.Nid
-				} else {
-					tagsMap["endpoint"] = data.Endpoint
-				}
+				tagsMap["endpoint"] = data.Endpoint
 
 				// 校验 GroupKey 是否在 tags 中
 				for _, key := range input.GroupKey {
@@ -180,9 +144,6 @@ func (tsdb *TsdbDataSource) QueryDataForUI(input dataobj.QueryDataForUI) []*data
 
 			// 有需要聚合的 tag 需要将 counter 带上
 			for counter, datas := range aggrCounter {
-				if counter != "" {
-					counter = "/" + input.AggrFunc + "," + counter
-				}
 				aggrData := &dataobj.TsdbQueryResponse{
 					Start:   input.Start,
 					End:     input.End,
@@ -197,31 +158,20 @@ func (tsdb *TsdbDataSource) QueryDataForUI(input dataobj.QueryDataForUI) []*data
 	return resp
 }
 
-func (tsdb *TsdbDataSource) fetchDataSync(start, end int64, consolFun, nid, endpoint, counter string, step int, worker chan struct{}, dataChan chan *dataobj.TsdbQueryResponse) {
+func (tsdb *TsdbDataSource) fetchDataSync(start, end int64, consolFun, endpoint, counter string, step int, worker chan struct{}, dataChan chan *dataobj.TsdbQueryResponse) {
 	defer func() {
 		<-worker
 	}()
 	stats.Counter.Set("query.tsdb", 1)
 
-	if nid != "" {
-		endpoint = dataobj.NidToEndpoint(nid)
-	}
-
 	data, err := tsdb.fetchData(start, end, consolFun, endpoint, counter, step)
 	if err != nil {
 		logger.Warningf("fetch tsdb data error: %+v", err)
-		stats.Counter.Set("query.data.err", 1)
+		stats.Counter.Set("query.tsdb.err", 1)
+		data.Endpoint = endpoint
 		data.Counter = counter
 		data.Step = step
 	}
-
-	if nid != "" {
-		data.Nid = nid
-		data.Endpoint = ""
-	} else {
-		data.Endpoint = endpoint
-	}
-
 	dataChan <- data
 }
 
