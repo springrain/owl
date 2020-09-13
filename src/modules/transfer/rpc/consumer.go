@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"os/signal"
 
@@ -27,7 +28,7 @@ func consumer() {
 	// Create new consumer
 	master, err := sarama.NewConsumer(brokers, config)
 	if err != nil {
-		logger.Error(err)
+		log.Fatalf("create consumer err:%v", err)
 	}
 
 	defer func() {
@@ -57,6 +58,10 @@ func consumer() {
 			case err := <-consumer.Errors():
 				logger.Error(err)
 			case msg := <-consumer.Messages():
+				if msg == nil {
+					continue
+				}
+
 				msgCount++
 
 				out := &dataobj.AggrOut{}
