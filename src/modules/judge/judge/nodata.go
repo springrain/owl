@@ -1,11 +1,15 @@
 package judge
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/didi/nightingale/src/dataobj"
 	"github.com/didi/nightingale/src/model"
+	"github.com/didi/nightingale/src/modules/judge/backend/redi"
 	"github.com/didi/nightingale/src/modules/judge/cache"
 
 	"github.com/toolkits/pkg/concurrent/semaphore"
@@ -38,8 +42,8 @@ func nodataJudge() {
 	stras := cache.NodataStra.GetAll()
 	for _, stra := range stras {
 		//nodata处理
-		if len(stra.Endpoints) == 0 && len(stra.Nids) == 0 {
-			logger.Debugf("stra:%+v endpoints or nids is null", stra)
+		if len(stra.Endpoints) == 0 {
+			logger.Warningf("stra:%+v endpoints is null", stra)
 			continue
 		}
 
@@ -61,12 +65,10 @@ func nodataJudge() {
 				metric = data.Counter
 			}
 
-			if data.Endpoint == "" && data.Nid == "" {
+			if data.Endpoint == "" {
 				continue
 			}
-
 			judgeItem := &dataobj.JudgeItem{
-				Nid:      data.Nid,
 				Endpoint: data.Endpoint,
 				Metric:   metric,
 				Tags:     tag,
@@ -76,12 +78,61 @@ func nodataJudge() {
 			}
 
 			nodataJob.Acquire()
-			go AsyncJudge(nodataJob, stra, stra.Exprs, dataobj.RRDData2HistoryData(data.Values), judgeItem, now, []dataobj.History{}, "", "", "", []bool{})
+			go AsyncJudge(nodataJob, stra, stra.Exprs, dataobj.RRDData2HistoryData(data.Values), judgeItem, now)
 		}
 	}
 }
 
-func AsyncJudge(sema *semaphore.Semaphore, stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryData, firstItem *dataobj.JudgeItem, now int64, history []dataobj.History, info string, value string, extra string, status []bool) {
+func AsyncJudge(sema *semaphore.Semaphore, stra *model.Stra, exps []model.Exp, historyData []*dataobj.HistoryData, firstItem *dataobj.JudgeItem, now int64) {
 	defer sema.Release()
-	Judge(stra, exps, historyData, firstItem, now, history, info, value, extra, status)
+
+	historyArr := []dataobj.History{}
+	statusArr := []bool{}
+	eventInfo := ""
+	value := ""
+
+	for _, expr := range exps {
+		respData, err := GetData(stra, expr, firstItem, now, true)
+		if err != nil {
+			logger.Errorf("stra:%+v get query data err:%v", stra, err)
+			return
+		}
+
+		if len(respData) != 1 {
+			logger.Errorf("stra:%+v get query data respData:%v err", stra, respData)
+			return
+		}
+
+		history, info, lastValue, status := Judge(stra, expr, dataobj.RRDData2HistoryData(respData[0].Values), firstItem, now)
+
+		statusArr = append(statusArr, status)
+		if value == "" {
+			value = fmt.Sprintf("%s: %s", expr.Metric, lastValue)
+		} else {
+			value += fmt.Sprintf("; %s: %s", expr.Metric, lastValue)
+		}
+
+		historyArr = append(historyArr, history)
+		eventInfo += info
+	}
+
+	bs, err := json.Marshal(historyArr)
+	if err != nil {
+		logger.Errorf("Marshal history:%+v err:%v", historyArr, err)
+	}
+
+	event := &dataobj.Event{
+		ID:        fmt.Sprintf("s_%d_%s", stra.Id, firstItem.PrimaryKey()),
+		Etime:     now,
+		Endpoint:  firstItem.Endpoint,
+		CurNid:    firstItem.Nid,
+		Info:      eventInfo,
+		Detail:    string(bs),
+		Value:     value,
+		Partition: redi.Config.Prefix + "/event/p" + strconv.Itoa(stra.Priority),
+		Sid:       stra.Id,
+		Hashid:    getHashId(stra.Id, firstItem),
+	}
+
+	sendEventIfNeed(historyData, statusArr, event, stra)
 }
