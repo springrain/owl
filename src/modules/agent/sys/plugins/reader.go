@@ -15,13 +15,17 @@ import (
 
 // key: 60_ntp.py
 func ListPlugins() map[string]*Plugin {
-	plugins := make(map[string]*Plugin)
-	if sys.Config.PluginRemote {
-		plugins = ListPluginsFromMonapi()
-	} else {
-		plugins = ListPluginsFromLocal()
+	remotePlugins := make(map[string]*Plugin)
+	localPlugins := make(map[string]*Plugin)
+
+	localPlugins = ListPluginsFromLocal()
+	remotePlugins = ListPluginsFromMonapi()
+
+	for key, p := range remotePlugins {
+		localPlugins[key] = p
 	}
-	return plugins
+
+	return localPlugins
 }
 
 func ListPluginsFromMonapi() map[string]*Plugin {
