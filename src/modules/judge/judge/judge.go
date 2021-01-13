@@ -53,7 +53,7 @@ func ToJudge(historyMap *cache.JudgeItemMap, key string, val *dataobj.JudgeItem,
 	}
 	linkedList, exists := historyMap.Get(key)
 	if exists {
-		needJudge := linkedList.PushFrontAndMaintain(val, needCount)
+		needJudge := linkedList.PushFrontAndMaintain(val, needCount, stra.AlertDur)
 		if !needJudge {
 			return
 		}

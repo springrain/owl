@@ -25,7 +25,7 @@ func (ll *SafeLinkedList) Len() int {
 }
 
 // @return needJudge 如果是false不需要做judge，因为新上来的数据不合法
-func (ll *SafeLinkedList) PushFrontAndMaintain(v *dataobj.JudgeItem, maxCount int) bool {
+func (ll *SafeLinkedList) PushFrontAndMaintain(v *dataobj.JudgeItem, maxCount, alertDur int) bool {
 	ll.Lock()
 	defer ll.Unlock()
 
@@ -36,16 +36,16 @@ func (ll *SafeLinkedList) PushFrontAndMaintain(v *dataobj.JudgeItem, maxCount in
 			return false
 		}
 	}
+	earliestTs := v.Timestamp - int64(alertDur)
 
 	ll.L.PushFront(v)
 
 	sz++
-	if sz <= maxCount {
-		return true
-	}
+	for i := 0; i < sz; i++ {
+		if ll.L.Back().Value.(*dataobj.JudgeItem).Timestamp >= earliestTs {
+			break
+		}
 
-	del := sz - maxCount
-	for i := 0; i < del; i++ {
 		ll.L.Remove(ll.L.Back())
 	}
 
