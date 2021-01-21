@@ -106,13 +106,13 @@ func tmsNeedPush(tms int64, filePath string, step int64, waitPush int) bool {
 	// 为解决日志时间戳乱序的最大等待时间, hard code
 	// delay == 0时, 不用额外等待, 进而提高时效性
 	if delay > 0 {
-		var maxDelay int64
+		var maxDelay int32
 		if step <= 10 {
-			maxDelay = step * 3
+			maxDelay = int32(step) * 3
 		} else if step > 10 && step <= 30 {
-			maxDelay = step * 2
+			maxDelay = int32(step) * 2
 		} else {
-			maxDelay = step
+			maxDelay = int32(step)
 		}
 		if delay > maxDelay {
 			delay = maxDelay
@@ -129,7 +129,7 @@ func tmsNeedPush(tms int64, filePath string, step int64, waitPush int) bool {
 		return true
 	}
 
-	if tms < AlignStepTms(step, latest-delay) {
+	if tms < AlignStepTms(step, latest-int64(delay)) {
 		return true
 	}
 

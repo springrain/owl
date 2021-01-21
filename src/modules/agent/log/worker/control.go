@@ -66,7 +66,7 @@ func UpdateConfigsLoop() {
 	}
 }
 
-func GetLatestTmsAndDelay(filepath string) (int64, int64, bool) {
+func GetLatestTmsAndDelay(filepath string) (int64, int32, bool) {
 	ManagerJobLock.RLock()
 	job, ok := ManagerJob[filepath]
 	ManagerJobLock.RUnlock()
@@ -74,6 +74,7 @@ func GetLatestTmsAndDelay(filepath string) (int64, int64, bool) {
 	if !ok {
 		return 0, 0, false
 	}
+
 	latest, delay := job.w.GetLatestTmsAndDelay()
 	return latest, delay, true
 }
