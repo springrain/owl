@@ -61,7 +61,12 @@ func Query(reqs []*dataobj.QueryData, stra *models.Stra, expFunc string) []*data
 
 				resp.Data[i].Values = values
 				respData = append(respData, resp.Data[i])
-				key := resp.Data[i].Endpoint + "/" + resp.Data[i].Nid + "/" + resp.Data[i].Counter
+				var key string
+				if resp.Data[i].Nid != "" {
+					key = "/" + resp.Data[i].Nid + "/" + resp.Data[i].Counter
+				} else {
+					key = resp.Data[i].Endpoint + "//" + resp.Data[i].Counter
+				}
 				filterMap[key] = struct{}{}
 			}
 		}
