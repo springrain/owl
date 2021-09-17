@@ -9,10 +9,30 @@ var (
 	ProcsWithScheduler = make(map[string]*ProcScheduler)
 )
 
+func sameProc(new, old *models.ProcCollect) bool {
+	if new.CollectMethod != old.CollectMethod {
+		return false
+	}
+
+	if new.Step != old.Step {
+		return false
+	}
+
+	if new.Target != old.Target {
+		return false
+	}
+
+	if new.Tags != old.Tags {
+		return false
+	}
+
+	return true
+}
+
 func DelNoProcCollect(newCollect map[string]*models.ProcCollect) {
-	for currKey, currProc := range Procs {
+	for currKey := range Procs {
 		newProc, ok := newCollect[currKey]
-		if !ok || currProc.LastUpdated != newProc.LastUpdated {
+		if !ok || !sameProc(newProc, Procs[currKey]) {
 			deleteProc(currKey)
 		}
 	}
@@ -20,7 +40,7 @@ func DelNoProcCollect(newCollect map[string]*models.ProcCollect) {
 
 func AddNewProcCollect(newCollect map[string]*models.ProcCollect) {
 	for target, newProc := range newCollect {
-		if _, ok := Procs[target]; ok && newProc.LastUpdated == Procs[target].LastUpdated {
+		if _, ok := Procs[target]; ok && sameProc(newProc, Procs[target]) {
 			continue
 		}
 

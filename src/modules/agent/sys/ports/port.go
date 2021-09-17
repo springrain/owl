@@ -9,10 +9,26 @@ var (
 	PortsWithScheduler = make(map[int]*PortScheduler)
 )
 
+func samePort(new, old *models.PortCollect) bool {
+	if new.Step != old.Step {
+		return false
+	}
+
+	if new.Tags != old.Tags {
+		return false
+	}
+
+	if new.Timeout != old.Timeout {
+		return false
+	}
+
+	return true
+}
+
 func DelNoPortCollect(newCollect map[int]*models.PortCollect) {
-	for currKey, currPort := range Ports {
+	for currKey := range Ports {
 		newPort, ok := newCollect[currKey]
-		if !ok || currPort.LastUpdated != newPort.LastUpdated {
+		if !ok || !samePort(newPort, Ports[currKey]) {
 			deletePort(currKey)
 		}
 	}
@@ -20,7 +36,7 @@ func DelNoPortCollect(newCollect map[int]*models.PortCollect) {
 
 func AddNewPortCollect(newCollect map[int]*models.PortCollect) {
 	for target, newPort := range newCollect {
-		if _, ok := Ports[target]; ok && newPort.LastUpdated == Ports[target].LastUpdated {
+		if _, ok := Ports[target]; ok && samePort(newPort, Ports[target]) {
 			continue
 		}
 
