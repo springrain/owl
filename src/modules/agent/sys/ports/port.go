@@ -22,6 +22,10 @@ func samePort(new, old *models.PortCollect) bool {
 		return false
 	}
 
+	if new.Port != old.Port {
+		return false
+	}
+
 	return true
 }
 
