@@ -36,6 +36,7 @@ _test
 /vendor
 /tmp
 /pub
+/docker
 
 .alerts
 .idea
@@ -46,4 +47,5 @@ _test
 queries.active
 
 /n9e-*
+
 
