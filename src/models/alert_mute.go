@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/didi/nightingale/v5/src/pkg/ormx"
+
+	"context"
+
+	"gitee.com/chunanyong/zorm"
 	"github.com/pkg/errors"
 )
 
@@ -19,25 +23,46 @@ type TagFilter struct {
 	Vset   map[string]struct{} // parse value to regexp if func = 'in'
 }
 
+//AlertMuteStructTableName 表名常量,方便直接调用
+const AlertMuteStructTableName = "alert_mute"
+
+// AlertMute
 type AlertMute struct {
-	Id       int64        `json:"id" gorm:"primaryKey"`
-	GroupId  int64        `json:"group_id"`
-	Cluster  string       `json:"cluster"`
-	Tags     ormx.JSONArr `json:"tags"`
-	Cause    string       `json:"cause"`
-	Btime    int64        `json:"btime"`
-	Etime    int64        `json:"etime"`
-	CreateBy string       `json:"create_by"`
-	CreateAt int64        `json:"create_at"`
-	ITags    []TagFilter  `json:"-" gorm:"-"` // inner tags
+	//引入默认的struct,隔离IEntityStruct的方法改动
+	zorm.EntityStruct
+	Id       int64        `column:"id" json:"id"`
+	GroupId  int64        `column:"group_id" json:"group_id"`
+	Cluster  string       `column:"cluster" json:"cluster"`
+	Tags     ormx.JSONArr `column:"tags" json:"tags"`
+	Cause    string       `column:"cause" json:"cause"`
+	Btime    int64        `column:"btime" json:"btime"`
+	Etime    int64        `column:"etime" json:"etime"`
+	CreateAt int64        `column:"create_at" json:"create_at"`
+	CreateBy string       `column:"create_by" json:"create_by"`
+
+	//------------------数据库字段结束,自定义字段写在下面---------------//
+	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
+	ITags []TagFilter `json:"-"` // inner tags
 }
 
-func (m *AlertMute) TableName() string {
-	return "alert_mute"
+func (entity *AlertMute) GetTableName() string {
+	return AlertMuteStructTableName
+}
+
+func (entity *AlertMute) GetPKColumnName() string {
+	//如果没有主键
+	//return ""
+	return "id"
 }
 
 func AlertMuteGets(groupId int64) (lst []AlertMute, err error) {
-	err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	// err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName)
+	finder.Append("Where group_id=?", groupId)
+	finder.Append(" Order by id desc")
+
+	err = zorm.Query(ctx, finder, &lst, nil)
 	return
 }
 
@@ -101,39 +126,70 @@ func AlertMuteDel(ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	return DB().Where("id in ?", ids).Delete(new(AlertMute)).Error
+	// return DB().Where("id in ?", ids).Delete(new(AlertMute)).Error
+
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(AlertMuteStructTableName)
+		finder.Append(" Where id in (?)", ids)
+		_, err := zorm.UpdateFinder(ctx, finder)
+
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func AlertMuteStatistics(cluster string) (*Statistics, error) {
-	session := DB().Model(&AlertMute{}).Select("count(*) as total", "max(create_at) as last_updated")
+	stats := make([]*Statistics, 0)
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(create_at) as last_updated")
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append(" Where cluster = ?", cluster)
 	}
 
-	var stats []*Statistics
-	err := session.Find(&stats).Error
+	err := zorm.Query(ctx, finder, &stats, nil)
+
 	if err != nil {
 		return nil, err
 	}
-
 	return stats[0], nil
 }
 
 func AlertMuteGetsByCluster(cluster string) ([]*AlertMute, error) {
 	// clean expired first
 	buf := int64(30)
-	err := DB().Where("etime < ?", time.Now().Unix()+buf).Delete(new(AlertMute)).Error
+	// err := DB().Where("etime < ?", time.Now().Unix()+buf).Delete(new(AlertMute)).Error
+
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(AlertMuteStructTableName)
+		finder.Append(" Where etime < ?", time.Now().Unix()+buf)
+		_, err := zorm.UpdateFinder(ctx, finder)
+
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+
 	if err != nil {
 		return nil, err
 	}
 
 	// get my cluster's mutes
-	session := DB().Model(&AlertMute{})
+
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName) // select * from t_demo
+
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append(" Where cluster = ?", cluster)
 	}
 
-	var lst []*AlertMute
-	err = session.Find(&lst).Error
+	// session := DB().Model(&AlertMute{})
+
+	lst := make([]*AlertMute, 0)
+	// err = session.Find(&lst).Error
+	err = zorm.Query(ctx, finder, &lst, nil)
+
 	return lst, err
 }

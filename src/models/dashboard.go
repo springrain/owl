@@ -1,29 +1,58 @@
 package models
 
 import (
+	"context"
 	"strings"
 	"time"
 
+	"gitee.com/chunanyong/zorm"
 	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
-	"gorm.io/gorm"
 )
 
+const DashboardStructTableName = "dashboard"
+
+// Dashboard
 type Dashboard struct {
-	Id       int64    `json:"id" gorm:"primaryKey"`
-	GroupId  int64    `json:"group_id"`
-	Name     string   `json:"name"`
-	Tags     string   `json:"-"`
-	TagsLst  []string `json:"tags" gorm:"-"`
-	Configs  string   `json:"configs"`
-	CreateAt int64    `json:"create_at"`
-	CreateBy string   `json:"create_by"`
-	UpdateAt int64    `json:"update_at"`
-	UpdateBy string   `json:"update_by"`
+	//引入默认的struct,隔离IEntityStruct的方法改动
+	zorm.EntityStruct
+	//Id []
+	Id int64 `column:"id" json:"id"`
+	//GroupId busi group id
+	GroupId int64 `column:"group_id" json:"group_id"`
+	//Name []
+	Name string `column:"name" json:"name"`
+	//Tags split by space
+	Tags string `column:"tags" json:"-"`
+	//Configs dashboard variables
+	Configs string `column:"configs" json:"configs"`
+	//CreateAt []
+	CreateAt int64 `column:"create_at" json:"create_at"`
+	//CreateBy []
+	CreateBy string `column:"create_by" json:"create_by"`
+	//UpdateAt []
+	UpdateAt int64 `column:"update_at" json:"update_at"`
+	//UpdateBy []
+	UpdateBy string `column:"update_by" json:"update_by"`
+	//------------------数据库字段结束,自定义字段写在下面---------------//
+	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
+	TagsLst []string `json:"tags"`
 }
 
-func (d *Dashboard) TableName() string {
-	return "dashboard"
+//GetTableName 获取表名称
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *Dashboard) GetTableName() string {
+	return DashboardStructTableName
+}
+
+//GetPKColumnName 获取数据库表的主键字段名称.因为要兼容Map,只能是数据库的字段名称
+//不支持联合主键,变通认为无主键,业务控制实现(艰难取舍)
+//如果没有主键,也需要实现这个方法, return "" 即可
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *Dashboard) GetPKColumnName() string {
+	//如果没有主键
+	//return ""
+	return "id"
 }
 
 func (d *Dashboard) Verify() error {
@@ -57,6 +86,7 @@ func (d *Dashboard) Add() error {
 	d.UpdateAt = now
 
 	return Insert(d)
+
 }
 
 func (d *Dashboard) Update(selectField interface{}, selectFields ...interface{}) error {
@@ -64,7 +94,14 @@ func (d *Dashboard) Update(selectField interface{}, selectFields ...interface{})
 		return err
 	}
 
-	return DB().Model(d).Select(selectField, selectFields...).Updates(d).Error
+	// return DB().Model(d).Select(selectField, selectFields...).Updates(d).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, d)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func (d *Dashboard) Del() error {
@@ -72,36 +109,73 @@ func (d *Dashboard) Del() error {
 	if err != nil {
 		return err
 	}
-
+	ctx := getCtx()
 	if len(cgids) == 0 {
-		return DB().Transaction(func(tx *gorm.DB) error {
-			if err := tx.Where("id=?", d.Id).Delete(&Dashboard{}).Error; err != nil {
-				return err
-			}
-			return nil
+		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+			finder := zorm.NewDeleteFinder(ChartStructTableName)
+			finder.Append("Where id=?", d.Id)
+			_, err = zorm.UpdateFinder(ctx, finder)
+			return nil, err
 		})
+		return err
+
+		// return DB().Transaction(func(tx *gorm.DB) error {
+		// 	if err := tx.Where("id=?", d.Id).Delete(&Dashboard{}).Error; err != nil {
+		// 		return err
+		// 	}
+		// 	return nil
+		// })
 	}
-
-	return DB().Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("group_id in ?", cgids).Delete(&Chart{}).Error; err != nil {
-			return err
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(ChartStructTableName)
+		finder.Append("Where group_id in (?)", cgids)
+		_, err = zorm.UpdateFinder(ctx, finder)
+		if err != nil {
+			return nil, err
 		}
 
-		if err := tx.Where("dashboard_id=?", d.Id).Delete(&ChartGroup{}).Error; err != nil {
-			return err
+		finder = zorm.NewDeleteFinder(ChartGroupStructTableName)
+		finder.Append("Where dashboard_id=?", d.Id)
+		_, err = zorm.UpdateFinder(ctx, finder)
+		if err != nil {
+			return nil, err
 		}
 
-		if err := tx.Where("id=?", d.Id).Delete(&Dashboard{}).Error; err != nil {
-			return err
-		}
+		finder = zorm.NewDeleteFinder(DashboardStructTableName)
+		finder.Append("Where id=?", d.Id)
+		_, err = zorm.UpdateFinder(ctx, finder)
+		return nil, err
 
-		return nil
 	})
+	return err
+
+	// return DB().Transaction(func(tx *gorm.DB) error {
+	// 	if err := tx.Where("group_id in ?", cgids).Delete(&Chart{}).Error; err != nil {
+	// 		return err
+	// 	}
+
+	// 	if err := tx.Where("dashboard_id=?", d.Id).Delete(&ChartGroup{}).Error; err != nil {
+	// 		return err
+	// 	}
+
+	// 	if err := tx.Where("id=?", d.Id).Delete(&Dashboard{}).Error; err != nil {
+	// 		return err
+	// 	}
+
+	// 	return nil
+	// })
 }
 
 func DashboardGet(where string, args ...interface{}) (*Dashboard, error) {
-	var lst []*Dashboard
-	err := DB().Where(where, args...).Find(&lst).Error
+	lst := make([]*Dashboard, 0)
+	// err := DB().Where(where, args...).Find(&lst).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(DashboardStructTableName) // select * from t_demo
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
+	err := zorm.Query(ctx, finder, &lst, nil)
+
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +190,12 @@ func DashboardGet(where string, args ...interface{}) (*Dashboard, error) {
 }
 
 func DashboardCount(where string, args ...interface{}) (num int64, err error) {
-	return Count(DB().Model(&Dashboard{}).Where(where, args...))
+	// return Count(DB().Model(&Dashboard{}).Where(where, args...))
+	finder := zorm.NewSelectFinder(DashboardStructTableName, "count(*)")
+	if len(where) > 0 {
+		finder.Append("Where "+where, args...)
+	}
+	return Count(finder)
 }
 
 func DashboardExists(where string, args ...interface{}) (bool, error) {
@@ -125,23 +204,29 @@ func DashboardExists(where string, args ...interface{}) (bool, error) {
 }
 
 func DashboardGets(groupId int64, query string) ([]Dashboard, error) {
-	session := DB().Where("group_id=?", groupId).Order("name")
+	ctx := getCtx()
+	// session := DB().Where("group_id=?", groupId).Order("name")
+	finder := zorm.NewSelectFinder(DashboardStructTableName) // select * from t_demo
+	finder.Append("WHERE group_id=?", groupId).Append("Order by name")
 
 	arr := strings.Fields(query)
 	if len(arr) > 0 {
 		for i := 0; i < len(arr); i++ {
 			if strings.HasPrefix(arr[i], "-") {
 				q := "%" + arr[i][1:] + "%"
-				session = session.Where("name not like ? and tags not like ?", q, q)
+				// session = session.Where("name not like ? and tags not like ?", q, q)
+				finder.Append("AND name not like ? and tags not like ?", q, q)
 			} else {
 				q := "%" + arr[i] + "%"
-				session = session.Where("(name like ? or tags like ?)", q, q)
+				// session = session.Where("(name like ? or tags like ?)", q, q)
+				finder.Append("AND name like ? or tags like ?)", q, q)
 			}
 		}
 	}
 
-	var objs []Dashboard
-	err := session.Select("id", "group_id", "name", "tags", "create_at", "create_by", "update_at", "update_by").Find(&objs).Error
+	objs := make([]Dashboard, 0)
+	// err := session.Select("id", "group_id", "name", "tags", "create_at", "create_by", "update_at", "update_by").Find(&objs).Error
+	err := zorm.Query(ctx, finder, &objs, nil)
 	if err == nil {
 		for i := 0; i < len(objs); i++ {
 			objs[i].TagsLst = strings.Fields(objs[i].Tags)
@@ -156,7 +241,12 @@ func DashboardGetsByIds(ids []int64) ([]Dashboard, error) {
 		return []Dashboard{}, nil
 	}
 
-	var lst []Dashboard
-	err := DB().Where("id in ?", ids).Order("name").Find(&lst).Error
+	lst := make([]Dashboard, 0)
+	// err := DB().Where("id in ?", ids).Order("name").Find(&lst).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(DashboardStructTableName) // select * from t_demo
+	finder.Append("WHERE id in (?)", ids).Append("Order by name")
+	err := zorm.Query(ctx, finder, &lst, nil)
+
 	return lst, err
 }

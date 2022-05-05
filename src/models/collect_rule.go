@@ -1,33 +1,49 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
 
+	"gitee.com/chunanyong/zorm"
 	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
 )
 
 type CollectRule struct {
-	Id               int64    `json:"id"`
-	GroupId          int64    `json:"group_id"`
-	Cluster          string   `json:"cluster"`
+	zorm.EntityStruct
+	Id         int64  `column:"id" json:"id"`
+	GroupId    int64  `column:"group_id" json:"group_id"`
+	Cluster    string `column:"cluster" json:"cluster"`
+	TargetTags string `column:"target_tags" json:"-"`
+	Name       string `column:"name" json:"name"`
+	Note       string `column:"note" json:"note"`
+	Step       int    `column:"step" json:"step"`
+	Type       string `column:"type" json:"type"`
+	Data       string `column:"data" json:"data"`
+	CreateAt   int64  `column:"create_at" json:"create_at"`
+	CreateBy   string `column:"create_at" json:"create_at"`
+	UpdateAt   int64  `column:"update_at" json:"update_at"`
+	UpdateBy   string `column:"update_by" json:"update_by"`
+
+	AppendTagsJSON   []string `json:"append_tags"`
 	TargetIdents     string   `json:"-"`
-	TargetIdentsJSON []string `json:"target_idents" gorm:"-"`
-	TargetTags       string   `json:"-"`
-	TargetTagsJSON   []string `json:"target_tags" gorm:"-"`
-	Name             string   `json:"name"`
-	Note             string   `json:"note"`
-	Step             int      `json:"step"`
-	Type             string   `json:"type"`
-	Data             string   `json:"data"`
+	TargetIdentsJSON []string `json:"target_idents"`
+	TargetTagsJSON   []string `json:"target_tags"`
 	AppendTags       string   `json:"-"`
-	AppendTagsJSON   []string `json:"append_tags" gorm:"-"`
-	CreateAt         int64    `json:"create_at"`
-	CreateBy         string   `json:"create_by"`
-	UpdateAt         int64    `json:"update_at"`
-	UpdateBy         string   `json:"update_by"`
+}
+
+const CollectRuleStructTableName = "collect_rule"
+
+func (entity *CollectRule) GetTableName() string {
+	return CollectRuleStructTableName
+}
+
+func (entity *CollectRule) GetPKColumnName() string {
+	//如果没有主键
+	//return ""
+	return "id"
 }
 
 type PortConfig struct {
@@ -54,10 +70,6 @@ type LogConfig struct {
 	Func        string            `json:"func"`
 	Pattern     string            `json:"pattern"`
 	TagsPattern map[string]string `json:"tags_pattern"`
-}
-
-func (cr *CollectRule) TableName() string {
-	return "collect_rule"
 }
 
 func (cr *CollectRule) FE2DB() {
@@ -122,22 +134,42 @@ func (cr *CollectRule) Verify() error {
 }
 
 func CollectRuleDels(ids []int64, busiGroupId int64) error {
-	return DB().Where("id in ? and group_id=?", ids, busiGroupId).Delete(&CollectRule{}).Error
+	// return DB().Where("id in ? and group_id=?", ids, busiGroupId).Delete(&CollectRule{}).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(CollectRuleStructTableName)
+		finder.Append("WHERE id in ? and group_id=?", ids, busiGroupId)
+
+		_, err := zorm.UpdateFinder(ctx, finder)
+
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func CollectRuleExists(where string, args ...interface{}) (bool, error) {
-	return Exists(DB().Model(&CollectRule{}).Where(where, args...))
+	// return Exists(DB().Model(&CollectRule{}).Where(where, args...))
+	ctx := getCtx()
+	demo := &CollectRule{}
+	finder := zorm.NewFinder()
+	finder.Append("Where "+where, args...)
+	return zorm.QueryRow(ctx, finder, demo)
 }
 
 func CollectRuleGets(groupId int64, typ string) ([]CollectRule, error) {
-	session := DB().Where("group_id=?", groupId).Order("name")
-
+	// session := DB().Where("group_id=?", groupId).Order("name")
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(CollectRuleStructTableName) // select * from t_demo
+	finder.Append("WHERE group_id=?", groupId)
 	if typ != "" {
-		session = session.Where("type = ?", typ)
+		// session = session.Where("type = ?", typ)
+		finder.Append("AND type = ?", typ)
 	}
 
-	var lst []CollectRule
-	err := session.Find(&lst).Error
+	lst := make([]CollectRule, 0)
+	// err := session.Find(&lst).Error
+	err := zorm.Query(ctx, finder, &lst, nil)
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
@@ -148,8 +180,13 @@ func CollectRuleGets(groupId int64, typ string) ([]CollectRule, error) {
 }
 
 func CollectRuleGet(where string, args ...interface{}) (*CollectRule, error) {
-	var lst []*CollectRule
-	err := DB().Where(where, args...).Find(&lst).Error
+	lst := make([]*CollectRule, 0)
+	// err := DB().Where(where, args...).Find(&lst).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(CollectRuleStructTableName) // select * from t_demo
+	finder.Append("Where "+where, args...)
+
+	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +223,7 @@ func (cr *CollectRule) Add() error {
 	cr.UpdateAt = now
 
 	return Insert(cr)
+
 }
 
 func (cr *CollectRule) Update(crf CollectRule) error {
@@ -200,13 +238,21 @@ func (cr *CollectRule) Update(crf CollectRule) error {
 		}
 	}
 
-	crf.FE2DB()
-	crf.Id = cr.Id
-	crf.GroupId = cr.GroupId
-	crf.Type = cr.Type
-	crf.CreateAt = cr.CreateAt
-	crf.CreateBy = cr.CreateBy
-	crf.UpdateAt = time.Now().Unix()
+	// crf.FE2DB()
+	// crf.Id = cr.Id
+	// crf.GroupId = cr.GroupId
+	// crf.Type = cr.Type
+	// crf.CreateAt = cr.CreateAt
+	// crf.CreateBy = cr.CreateBy
+	// crf.UpdateAt = time.Now().Unix()
 
-	return DB().Model(cr).Select("*").Updates(crf).Error
+	// return DB().Model(cr).Select("*").Updates(crf).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		cr.UpdateAt = time.Now().Unix()
+		_, err := zorm.Update(ctx, cr)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }

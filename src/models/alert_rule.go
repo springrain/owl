@@ -6,49 +6,72 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
+	"gitee.com/chunanyong/zorm"
+	"github.com/didi/nightingale/v5/src/webapi/config"
 	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
-
-	"github.com/didi/nightingale/v5/src/webapi/config"
 )
 
+//AlertRuleStructTableName 表名常量,方便直接调用
+const AlertRuleStructTableName = "alert_rule"
+
+// AlertRuleStruct
 type AlertRule struct {
-	Id                   int64       `json:"id" gorm:"primaryKey"`
-	GroupId              int64       `json:"group_id"`                     // busi group id
-	Cluster              string      `json:"cluster"`                      // take effect by cluster
-	Name                 string      `json:"name"`                         // rule name
-	Note                 string      `json:"note"`                         // will sent in notify
-	Severity             int         `json:"severity"`                     // 0: Emergency 1: Warning 2: Notice
-	Disabled             int         `json:"disabled"`                     // 0: enabled, 1: disabled
-	PromForDuration      int         `json:"prom_for_duration"`            // prometheus for, unit:s
-	PromQl               string      `json:"prom_ql"`                      // just one ql
-	PromEvalInterval     int         `json:"prom_eval_interval"`           // unit:s
-	EnableStime          string      `json:"enable_stime"`                 // e.g. 00:00
-	EnableEtime          string      `json:"enable_etime"`                 // e.g. 23:59
-	EnableDaysOfWeek     string      `json:"-"`                            // split by space: 0 1 2 3 4 5 6
-	EnableDaysOfWeekJSON []string    `json:"enable_days_of_week" gorm:"-"` // for fe
-	EnableInBG           int         `json:"enable_in_bg"`                 // 0: global 1: enable one busi-group
-	NotifyRecovered      int         `json:"notify_recovered"`             // whether notify when recovery
-	NotifyChannels       string      `json:"-"`                            // split by space: sms voice email dingtalk wecom
-	NotifyChannelsJSON   []string    `json:"notify_channels" gorm:"-"`     // for fe
-	NotifyGroups         string      `json:"-"`                            // split by space: 233 43
-	NotifyGroupsObj      []UserGroup `json:"notify_groups_obj" gorm:"-"`   // for fe
-	NotifyGroupsJSON     []string    `json:"notify_groups" gorm:"-"`       // for fe
-	NotifyRepeatStep     int         `json:"notify_repeat_step"`           // notify repeat interval, unit: min
-	RecoverDuration      int64       `json:"recover_duration"`             // unit: s
-	Callbacks            string      `json:"-"`                            // split by space: http://a.com/api/x http://a.com/api/y'
-	CallbacksJSON        []string    `json:"callbacks" gorm:"-"`           // for fe
-	RunbookUrl           string      `json:"runbook_url"`                  // sop url
-	AppendTags           string      `json:"-"`                            // split by space: service=n9e mod=api
-	AppendTagsJSON       []string    `json:"append_tags" gorm:"-"`         // for fe
-	CreateAt             int64       `json:"create_at"`
-	CreateBy             string      `json:"create_by"`
-	UpdateAt             int64       `json:"update_at"`
-	UpdateBy             string      `json:"update_by"`
+	//引入默认的struct,隔离IEntityStruct的方法改动
+	zorm.EntityStruct
+	Id               int64  `column:"id" json:"id"`
+	GroupId          int64  `column:"group_id" json:"group_id"` //GroupId busi group id
+	Cluster          string `column:"cluster" json:"cluster"`
+	Name             string `column:"name" json:"name"`
+	Note             string `column:"note" json:"note"`
+	Severity         int    `column:"severity" json:"severity"`                     //Severity 0:Emergency 1:Warning 2:Notice
+	Disabled         int    `column:"disabled" json:"disabled"`                     //Disabled 0:enabled 1:disabled
+	PromForDuration  int    `column:"prom_for_duration" json:"prom_for_duration"`   //PromForDuration prometheus for, unit:s
+	PromQl           string `column:"prom_ql" json:"prom_ql"`                       //PromQl promql
+	PromEvalInterval int    `column:"prom_eval_interval" json:"prom_eval_interval"` //PromEvalInterval evaluate interval
+	EnableStime      string `column:"enable_stime" json:"enable_stime"`             //EnableStime []
+	EnableEtime      string `column:"enable_etime" json:"enable_etime"`             //EnableEtime []
+	EnableDaysOfWeek string `column:"enable_days_of_week" json:"-"`                 //EnableDaysOfWeek split by space: 0 1 2 3 4 5 6
+	NotifyRecovered  int    `column:"notify_recovered" json:"notify_recovered"`     //NotifyRecovered whether notify when recovery
+	NotifyChannels   string `column:"notify_channels" json:"-"`                     //NotifyChannels split by space: sms voice email dingtalk wecom
+	NotifyGroups     string `column:"notify_groups" json:"-"`                       //NotifyGroups split by space: 233 43
+	NotifyRepeatStep int    `column:"notify_repeat_step" json:"notify_repeat_step"` //NotifyRepeatStep unit: min
+	Callbacks        string `column:"callbacks" json:"-"`                           //Callbacks split by space: http://a.com/api/x http://a.com/api/y
+	RunbookUrl       string `column:"runbook_url" json:"runbook_url"`               //RunbookUrl []
+	AppendTags       string `column:"append_tags" json:"-"`                         //AppendTags split by space: service=n9e mod=api
+	CreateAt         int64  `column:"create_at" json:"create_at"`
+	CreateBy         string `column:"create_by" json:"create_by"`
+	UpdateAt         int64  `column:"update_at" json:"update_at"`
+	UpdateBy         string `column:"update_by" json:"update_by"`
+
+	//------------------数据库字段结束,自定义字段写在下面---------------//
+	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
+	EnableDaysOfWeekJSON []string    `json:"enable_days_of_week"` // for fe
+	EnableInBG           int         `json:"enable_in_bg"`        // 0: global 1: enable one busi-group
+	NotifyChannelsJSON   []string    `json:"notify_channels"`     // for fe
+	NotifyGroupsObj      []UserGroup `json:"notify_groups_obj"`   // for fe
+	NotifyGroupsJSON     []string    `json:"notify_groups"`       // for fe
+	RecoverDuration      int64       `json:"recover_duration"`    // unit: s
+	CallbacksJSON        []string    `json:"callbacks"`           // for fe
+	AppendTagsJSON       []string    `json:"append_tags"`         // for fe
 }
 
-func (ar *AlertRule) TableName() string {
-	return "alert_rule"
+//GetTableName 获取表名称
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *AlertRule) GetTableName() string {
+	return AlertRuleStructTableName
+}
+
+//GetPKColumnName 获取数据库表的主键字段名称.因为要兼容Map,只能是数据库的字段名称
+//不支持联合主键,变通认为无主键,业务控制实现(艰难取舍)
+//如果没有主键,也需要实现这个方法, return "" 即可
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *AlertRule) GetPKColumnName() string {
+	//如果没有主键
+	//return ""
+	return "id"
 }
 
 func (ar *AlertRule) Verify() error {
@@ -152,11 +175,26 @@ func (ar *AlertRule) Update(arf AlertRule) error {
 	arf.CreateBy = ar.CreateBy
 	arf.UpdateAt = time.Now().Unix()
 
-	return DB().Model(ar).Select("*").Updates(arf).Error
+	// return DB().Model(ar).Select("*").Updates(arf).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, &arf)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func (ar *AlertRule) UpdateFieldsMap(fields map[string]interface{}) error {
-	return DB().Model(ar).Updates(fields).Error
+	// return DB().Model(ar).Updates(fields).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+
+		_, err := zorm.UpdateNotZeroValue(ctx, ar)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func (ar *AlertRule) FillNotifyGroups(cache map[int64]*UserGroup) error {
@@ -194,10 +232,18 @@ func (ar *AlertRule) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	}
 
 	if delete {
+		ctx := getCtx()
 		// some user-group already deleted
 		ar.NotifyGroupsJSON = exists
 		ar.NotifyGroups = strings.Join(exists, " ")
-		DB().Model(ar).Update("notify_groups", ar.NotifyGroups)
+		// DB().Model(ar).Update("notify_groups", ar.NotifyGroups)
+		finder := zorm.NewUpdateFinder(AlertRuleStructTableName)
+		finder.Append(" notify_groups=? WHERE id=? ", ar.NotifyGroups, ar.Id)
+		_, _ = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+			_, err := zorm.UpdateFinder(ctx, finder)
+			//如果返回的err不是nil,事务就会回滚
+			return nil, err
+		})
 	}
 
 	return nil
@@ -220,30 +266,55 @@ func (ar *AlertRule) DB2FE() {
 }
 
 func AlertRuleDels(ids []int64, busiGroupId int64) error {
-	for i := 0; i < len(ids); i++ {
-		ret := DB().Where("id = ? and group_id=?", ids[i], busiGroupId).Delete(&AlertRule{})
-		if ret.Error != nil {
-			return ret.Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		var err error
+		for i := 0; i < len(ids); i++ {
+			// ret := DB().Where("id = ? and group_id=?", ids[i], busiGroupId).Delete(&AlertRule{})
+			AlertRule := &AlertRule{}
+			AlertRule.Id = ids[i]
+			AlertRule.GroupId = busiGroupId
+			_, err = zorm.Delete(ctx, AlertRule)
+			if err != nil {
+				return nil, err
+			}
+			// 说明确实删掉了，把相关的活跃告警也删了，这些告警永远都不会恢复了，而且策略都没了，说明没人关心了
+			if err == nil {
+				// DB().Where("rule_id = ?", ids[i]).Delete(new(AlertCurEvent))
+				AlertCurEvent := &AlertCurEvent{}
+				AlertCurEvent.RuleId = ids[i]
+				_, err = zorm.Delete(ctx, AlertCurEvent)
+			}
 		}
+		return nil, err
+	})
 
-		// 说明确实删掉了，把相关的活跃告警也删了，这些告警永远都不会恢复了，而且策略都没了，说明没人关心了
-		if ret.RowsAffected > 0 {
-			DB().Where("rule_id = ?", ids[i]).Delete(new(AlertCurEvent))
-		}
-	}
+	return err
 
-	return nil
 }
 
 func AlertRuleExists(where string, args ...interface{}) (bool, error) {
-	return Exists(DB().Model(&AlertRule{}).Where(where, args...))
+	lst := make([]*AlertRule, 0)
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
+
+	err := zorm.Query(ctx, finder, &lst, nil)
+	return len(lst) > 0, err
+	// return Exists(DB().Model(&AlertRule{}).Where(where, args...))
 }
 
 func AlertRuleGets(groupId int64) ([]AlertRule, error) {
-	session := DB().Where("group_id=?", groupId).Order("name")
-
-	var lst []AlertRule
-	err := session.Find(&lst).Error
+	// session := DB().Where("group_id=?", groupId).Order("name")
+	lst := make([]AlertRule, 0)
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	finder.Append(" Where group_id=?", groupId).Append(" Order by name")
+	err := zorm.Query(ctx, finder, &lst, nil)
+	// err := session.Find(&lst).Error
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
@@ -254,14 +325,18 @@ func AlertRuleGets(groupId int64) ([]AlertRule, error) {
 }
 
 func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
-	session := DB().Where("disabled = ?", 0)
-
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	// session := DB().Where("disabled = ?", 0)
+	finder.Append(" Where disabled = ?", 0)
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append(" and cluster = ?", cluster)
 	}
 
-	var lst []*AlertRule
-	err := session.Find(&lst).Error
+	lst := make([]*AlertRule, 0)
+	err := zorm.Query(ctx, finder, &lst, nil)
+	// err := session.Find(&lst).Error
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
@@ -272,8 +347,16 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 }
 
 func AlertRuleGet(where string, args ...interface{}) (*AlertRule, error) {
-	var lst []*AlertRule
-	err := DB().Where(where, args...).Find(&lst).Error
+	lst := make([]*AlertRule, 0)
+	// err := DB().Where(where, args...).Find(&lst).Error
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
+
+	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -292,8 +375,11 @@ func AlertRuleGetById(id int64) (*AlertRule, error) {
 }
 
 func AlertRuleGetName(id int64) (string, error) {
-	var names []string
-	err := DB().Model(new(AlertRule)).Where("id = ?", id).Pluck("name", &names).Error
+	names := make([]string, 0)
+	ctx := getCtx()
+	// err := DB().Model(new(AlertRule)).Where("id = ?", id).Pluck("name", &names).Error
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "name")
+	err := zorm.Query(ctx, finder, &names, nil)
 	if err != nil {
 		return "", err
 	}
@@ -306,14 +392,19 @@ func AlertRuleGetName(id int64) (string, error) {
 }
 
 func AlertRuleStatistics(cluster string) (*Statistics, error) {
-	session := DB().Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ?", 0)
+	// session := DB().Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ?", 0)
 
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "count(*) as total, max(update_at) as last_updated")
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append(" Where cluster = ?", cluster)
 	}
 
-	var stats []*Statistics
-	err := session.Find(&stats).Error
+	stats := make([]*Statistics, 0)
+	// err := session.Find(&stats).Error
+	err := zorm.Query(ctx, finder, &stats, nil)
+
 	if err != nil {
 		return nil, err
 	}

@@ -1,48 +1,83 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"gitee.com/chunanyong/zorm"
 	"github.com/didi/nightingale/v5/src/pkg/ormx"
 	"github.com/pkg/errors"
 )
 
+//AlertSubscribeStructTableName 表名常量,方便直接调用
+const AlertSubscribeStructTableName = "alert_subscribe"
+
+// AlertSubscribeStruct
 type AlertSubscribe struct {
-	Id               int64        `json:"id" gorm:"primaryKey"`
-	GroupId          int64        `json:"group_id"`
-	Cluster          string       `json:"cluster"`
-	RuleId           int64        `json:"rule_id"`
-	RuleName         string       `json:"rule_name" gorm:"-"` // for fe
-	Tags             ormx.JSONArr `json:"tags"`
-	RedefineSeverity int          `json:"redefine_severity"`
-	NewSeverity      int          `json:"new_severity"`
-	RedefineChannels int          `json:"redefine_channels"`
-	NewChannels      string       `json:"new_channels"`
-	UserGroupIds     string       `json:"user_group_ids"`
-	UserGroups       []UserGroup  `json:"user_groups" gorm:"-"` // for fe
-	CreateBy         string       `json:"create_by"`
-	CreateAt         int64        `json:"create_at"`
-	UpdateBy         string       `json:"update_by"`
-	UpdateAt         int64        `json:"update_at"`
-	ITags            []TagFilter  `json:"-" gorm:"-"` // inner tags
+	//引入默认的struct,隔离IEntityStruct的方法改动
+	zorm.EntityStruct
+	Id               int64        `column:"id" json:"id"`
+	GroupId          int64        `column:"group_id" json:"group_id"` //GroupId busi group id
+	Cluster          string       `column:"cluster" json:"cluster"`
+	RuleId           int64        `column:"rule_id" json:"rule_id"`
+	Tags             ormx.JSONArr `column:"tags" json:"tags"`
+	RedefineSeverity int          `column:"redefine_severity" json:"redefine_severity"` //RedefineSeverity is redefine severity?
+	NewSeverity      int          `column:"new_severity" json:"new_severity"`           //NewSeverity 0:Emergency 1:Warning 2:Notice
+	RedefineChannels int          `column:"redefine_channels" json:"redefine_channels"` //RedefineChannels is redefine channels?
+	NewChannels      string       `column:"new_channels" json:"new_channels"`           //NewChannels split by space: sms voice email dingtalk wecom
+	UserGroupIds     string       `column:"user_group_ids" json:"user_group_ids"`       //UserGroupIds split by space 1 34 5, notify cc to user_group_ids
+	CreateAt         int64        `column:"create_at" json:"create_at"`
+	CreateBy         string       `column:"create_by" json:"create_by"`
+	UpdateAt         int64        `column:"update_at" json:"update_at"`
+	UpdateBy         string       `column:"update_by" json:"update_by"`
+
+	//------------------数据库字段结束,自定义字段写在下面---------------//
+	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
+	UserGroups []UserGroup `json:"user_groups"` // for fe
+	RuleName   string      `json:"rule_name"`   // for fe
+	ITags      []TagFilter `json:"-"`           // inner tags
 }
 
-func (s *AlertSubscribe) TableName() string {
-	return "alert_subscribe"
+//GetTableName 获取表名称
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *AlertSubscribe) GetTableName() string {
+	return AlertSubscribeStructTableName
+}
+
+//GetPKColumnName 获取数据库表的主键字段名称.因为要兼容Map,只能是数据库的字段名称
+//不支持联合主键,变通认为无主键,业务控制实现(艰难取舍)
+//如果没有主键,也需要实现这个方法, return "" 即可
+//IEntityStruct 接口的方法,实体类需要实现!!!
+func (entity *AlertSubscribe) GetPKColumnName() string {
+	//如果没有主键
+	//return ""
+	return "id"
 }
 
 func AlertSubscribeGets(groupId int64) (lst []AlertSubscribe, err error) {
-	err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertSubscribeStructTableName) // select * from t_demo
+	finder.Append(" Where group_id=?", groupId).Append(" Order by id desc")
+	err = zorm.Query(ctx, finder, &lst, nil)
+	// err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
 	return
 }
 
 func AlertSubscribeGet(where string, args ...interface{}) (*AlertSubscribe, error) {
-	var lst []*AlertSubscribe
-	err := DB().Where(where, args...).Find(&lst).Error
+	lst := make([]*AlertSubscribe, 0)
+	// err := DB().Where(where, args...).Find(&lst).Error
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertSubscribeStructTableName) // select * from t_demo
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
+
+	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +211,17 @@ func (s *AlertSubscribe) FillUserGroups(cache map[int64]*UserGroup) error {
 
 	if delete {
 		// some user-group already deleted
-		DB().Model(s).Update("user_group_ids", strings.Join(exists, " "))
+		// DB().Model(s).Update("user_group_ids", strings.Join(exists, " "))
+		ctx := getCtx()
 		s.UserGroupIds = strings.Join(exists, " ")
+		finder := zorm.NewUpdateFinder(AlertSubscribeStructTableName)
+		finder.Append("user_group_ids=? WHERE id=?", s.UserGroupIds, s.Id)
+		_, _ = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+			_, err := zorm.UpdateFinder(ctx, finder)
+			//如果返回的err不是nil,事务就会回滚
+			return nil, err
+		})
+		//s.UserGroupIds = strings.Join(exists, " ")
 	}
 
 	return nil
@@ -188,25 +232,44 @@ func (s *AlertSubscribe) Update(selectField interface{}, selectFields ...interfa
 		return err
 	}
 
-	return DB().Model(s).Select(selectField, selectFields...).Updates(s).Error
+	// return DB().Model(s).Select(selectField, selectFields...).Updates(s).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, s)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func AlertSubscribeDel(ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	return DB().Where("id in ?", ids).Delete(new(AlertSubscribe)).Error
+
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(AlertSubscribeStructTableName)
+		finder.Append("Where id in (?)", ids)
+		_, err := zorm.UpdateFinder(ctx, finder)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
+
+	// return DB().Where("id in ?", ids).Delete(new(AlertSubscribe)).Error
 }
 
 func AlertSubscribeStatistics(cluster string) (*Statistics, error) {
-	session := DB().Model(&AlertSubscribe{}).Select("count(*) as total", "max(update_at) as last_updated")
-
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "count(*) as total, max(update_at) as last_updated")
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append(" Where cluster = ?", cluster)
 	}
-
-	var stats []*Statistics
-	err := session.Find(&stats).Error
+	stats := make([]*Statistics, 0)
+	// err := session.Find(&stats).Error
+	err := zorm.Query(ctx, finder, &stats, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -215,13 +278,23 @@ func AlertSubscribeStatistics(cluster string) (*Statistics, error) {
 }
 
 func AlertSubscribeGetsByCluster(cluster string) ([]*AlertSubscribe, error) {
-	// get my cluster's subscribes
-	session := DB().Model(&AlertSubscribe{})
+	lst := make([]*AlertSubscribe, 0)
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertSubscribeStructTableName) // select * from t_demo
 	if cluster != "" {
-		session = session.Where("cluster = ?", cluster)
+		// session = session.Where("cluster = ?", cluster)
+		finder.Append("Where cluster = ?", cluster)
 	}
 
-	var lst []*AlertSubscribe
-	err := session.Find(&lst).Error
+	err := zorm.Query(ctx, finder, &lst, nil)
+
+	// get my cluster's subscribes
+	// session := DB().Model(&AlertSubscribe{})
+	// if cluster != "" {
+	// 	session = session.Where("cluster = ?", cluster)
+	// }
+
+	// err := session.Find(&lst).Error
 	return lst, err
 }
