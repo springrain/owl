@@ -305,11 +305,8 @@ func AlertCurEventGets(bgid, stime, etime int64, severity int, clusters []string
 	}
 
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1
-	} else {
-		page.PageNo = offset/limit + 1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
+	page.PageSize = limit
 	finder.Append(" Order by id desc")
 	err := zorm.Query(ctx, finder, &lst, page)
 	if err == nil {

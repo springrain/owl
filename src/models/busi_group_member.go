@@ -161,7 +161,9 @@ func BusiGroupMemberDel(where string, args ...interface{}) error {
 	ctx := getCtx()
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		finder := zorm.NewDeleteFinder(BusiGroupMemberStructTableName)
-		finder.Append("Where "+where, args...)
+		if where != "" {
+			finder.Append("Where "+where, args...)
+		}
 		_, err := zorm.UpdateFinder(ctx, finder)
 		//如果返回的err不是nil,事务就会回滚
 		return nil, err

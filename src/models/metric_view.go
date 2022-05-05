@@ -139,7 +139,9 @@ func MetricViewGet(where string, args ...interface{}) (*MetricView, error) {
 	lst := make([]*MetricView, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName)
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	_, err := zorm.QueryRow(ctx, finder, &lst)
 	// err := DB().Where(where, args...).Find(&lst).Error
 	if err != nil {

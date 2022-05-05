@@ -81,11 +81,8 @@ func TaskTplGets(groupId int64, query string, limit, offset int) ([]TaskTpl, err
 	finder := zorm.NewSelectFinder(TaskTplStructTableName)
 	finder.Append("Where group_id = ?", groupId)
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
+	page.PageSize = limit
 	tpls := make([]TaskTpl, 0)
 	if query != "" {
 		arr := strings.Fields(query)
@@ -111,7 +108,9 @@ func TaskTplGet(where string, args ...interface{}) (*TaskTpl, error) {
 	arr := make([]*TaskTpl, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(TaskTplStructTableName)
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	err := zorm.Query(ctx, finder, &arr, nil)
 	// err := DB().Where(where, args...).Find(&arr).Error
 	if err != nil {

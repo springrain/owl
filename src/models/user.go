@@ -376,17 +376,8 @@ func UserGets(query string, limit, offset int) ([]User, error) {
 	finder := zorm.NewSelectFinder(UserStructTableName) // select * from t_demo
 
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
-
-	page.PageSize = limit //每页20条,默认是20
-
-	fmt.Println("limit is:", limit)
-	fmt.Println("offset is:", offset)
-	fmt.Println("PageNo is:", page.PageNo)
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
+	page.PageSize = limit
 
 	if query != "" {
 		q := "%" + query + "%"

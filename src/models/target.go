@@ -169,11 +169,7 @@ func TargetGets(bgid int64, clusters []string, query string, limit, offset int) 
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(TargetStructTableName)
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
 	page.PageSize = limit
 	finder.Append("Where 1=1 ")
 	if bgid >= 0 {

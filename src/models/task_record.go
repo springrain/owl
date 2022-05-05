@@ -88,11 +88,7 @@ func TaskRecordGets(bgid, beginTime int64, createBy, query string, limit, offset
 	}
 
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
 	page.PageSize = limit
 	finder.Append("Order by create_at desc")
 	// session := DB().Where("create_at > ? and group_id = ?", beginTime, bgid).Order("create_at desc").Limit(limit).Offset(offset)

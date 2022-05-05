@@ -36,7 +36,9 @@ func RoleGets(where string, args ...interface{}) ([]Role, error) {
 
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(RoleStructTableName) // select * from t_demo
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	err := zorm.Query(ctx, finder, &objs, nil)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to query roles")

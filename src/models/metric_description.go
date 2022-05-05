@@ -111,11 +111,7 @@ func MetricDescriptionGets(query string, limit, offset int) ([]MetricDescription
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(MetricDescriptionStructTableName)
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
 	page.PageSize = limit
 
 	if query != "" {

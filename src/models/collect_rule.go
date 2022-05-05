@@ -153,7 +153,9 @@ func CollectRuleExists(where string, args ...interface{}) (bool, error) {
 	ctx := getCtx()
 	demo := &CollectRule{}
 	finder := zorm.NewFinder()
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	return zorm.QueryRow(ctx, finder, demo)
 }
 
@@ -184,7 +186,9 @@ func CollectRuleGet(where string, args ...interface{}) (*CollectRule, error) {
 	// err := DB().Where(where, args...).Find(&lst).Error
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(CollectRuleStructTableName) // select * from t_demo
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 
 	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {

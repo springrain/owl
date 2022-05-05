@@ -114,7 +114,9 @@ func UserGroupGet(where string, args ...interface{}) (*UserGroup, error) {
 	//err := DB().Where(where, args...).Find(&lst).Error
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(UserGroupStructTableName)
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {
 		return nil, err

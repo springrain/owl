@@ -192,7 +192,7 @@ func DashboardGet(where string, args ...interface{}) (*Dashboard, error) {
 func DashboardCount(where string, args ...interface{}) (num int64, err error) {
 	// return Count(DB().Model(&Dashboard{}).Where(where, args...))
 	finder := zorm.NewSelectFinder(DashboardStructTableName, "count(*)")
-	if len(where) > 0 {
+	if where != "" {
 		finder.Append("Where "+where, args...)
 	}
 	return Count(finder)

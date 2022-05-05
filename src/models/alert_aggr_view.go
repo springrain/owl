@@ -162,7 +162,9 @@ func AlertAggrViewGet(where string, args ...interface{}) (*AlertAggrView, error)
 	lst := make([]*AlertAggrView, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertAggrViewStructTableName)
-	finder.Append("Where "+where, args...)
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
 	err := zorm.Query(ctx, finder, &lst, nil)
 	// err := DB().Where(where, args...).Find(&lst).Error
 	if err != nil {

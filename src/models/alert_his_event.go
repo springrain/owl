@@ -152,11 +152,7 @@ func AlertHisEventGets(bgid, stime, etime int64, severity int, recovered int, cl
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(AlertHisEventStructTableName) // select * from t_demo
 	page := zorm.NewPage()
-	if offset == 0 {
-		page.PageNo = offset + 1 //查询第1页,默认是1
-	} else {
-		page.PageNo = offset/limit + 1 //查询第1页,默认是1
-	}
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
 	page.PageSize = limit
 	finder.Append("Where last_eval_time between ? and ? ", stime, etime)
 	if bgid > 0 {
