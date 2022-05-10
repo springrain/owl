@@ -59,10 +59,14 @@ func (t *Target) Add() error {
 	}
 
 	if obj.Cluster != t.Cluster {
-		return DB().Model(&Target{}).Where("ident = ?", t.Ident).Updates(map[string]interface{}{
-			"cluster":   t.Cluster,
-			"update_at": t.UpdateAt,
-		}).Error
+		ctx := getCtx()
+		finder := zorm.NewUpdateFinder(TargetStructTableName).Append("cluster=?,update_at=? WHERE ident=?", t.Cluster, t.UpdateAt, t.Ident)
+		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+			_, err := zorm.UpdateFinder(ctx, finder)
+			//如果返回的err不是nil,事务就会回滚
+			return nil, err
+		})
+		return err
 	}
 
 	return nil
