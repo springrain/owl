@@ -200,23 +200,10 @@ func (bg *BusiGroup) Del() error {
 	}
 
 	// hasCR, err := Exists(DB().Table("collect_rule").Where("group_id=?", bg.Id))
-	cr := &CollectRule{}
-	finder = zorm.NewSelectFinder(CollectRuleStructTableName)
-	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, cr)
-	if err != nil {
-		return err
-	}
-
-	if has {
-		return errors.New("Some collect rules still in the BusiGroup")
-	}
-
-	// has, err = Exists(DB().Model(&AlertRule{}).Where("group_id=?", bg.Id))
-	ar := &AlertRule{}
+	cr := &AlertRule{}
 	finder = zorm.NewSelectFinder(AlertRuleStructTableName)
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, ar)
+	has, err = zorm.QueryRow(ctx, finder, cr)
 	if err != nil {
 		return err
 	}
