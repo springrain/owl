@@ -252,7 +252,11 @@ func DashboardGetsByIds(ids []int64) ([]Dashboard, error) {
 }
 
 func DashboardGetAll() ([]Dashboard, error) {
-	var lst []Dashboard
-	err := DB().Find(&lst).Error
+	// var lst []Dashboard
+	// err := DB().Find(&lst).Error
+	lst := make([]Dashboard, 0)
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(DashboardStructTableName) // select * from t_demo
+	err := zorm.Query(ctx, finder, &lst, nil)
 	return lst, err
 }

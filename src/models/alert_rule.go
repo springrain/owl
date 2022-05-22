@@ -187,7 +187,7 @@ func (ar *AlertRule) Update(arf AlertRule) error {
 
 	// return DB().Model(ar).Select("*").Updates(arf).Error
 	ctx := getCtx()
-	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		_, err := zorm.UpdateNotZeroValue(ctx, &arf)
 		//如果返回的err不是nil,事务就会回滚
 		return nil, err
@@ -365,10 +365,14 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 }
 
 func AlertRulesGetByProds(prods []string) ([]*AlertRule, error) {
-	session := DB().Where("disabled = ? and prod IN (?)", 0, prods)
-
-	var lst []*AlertRule
-	err := session.Find(&lst).Error
+	// session := DB().Where("disabled = ? and prod IN (?)", 0, prods)
+	// err := session.Find(&lst).Error
+	lst := make([]*AlertRule, 0)
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	finder.Append(" Where disabled = ? and prod IN (?)", 0, prods)
+	err := zorm.Query(ctx, finder, &lst, nil)
+	
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()

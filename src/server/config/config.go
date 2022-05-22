@@ -125,6 +125,7 @@ type Config struct {
 	BusiGroupLabelKey string
 	AnomalyDataApi    []string
 	EngineDelay       int64
+	DisableUsageReport bool
 	Log               logx.Config
 	HTTP              httpx.Config
 	BasicAuth         gin.Accounts
