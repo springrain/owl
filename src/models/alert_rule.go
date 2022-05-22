@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,6 +27,10 @@ type AlertRule struct {
 	Cluster          string `column:"cluster" json:"cluster"`
 	Name             string `column:"name" json:"name"`
 	Note             string `column:"note" json:"note"`
+	Prod             string `column:"prod" json:"prod"`                         // product empty means n9e
+	Algorithm        string `column:"algorithm" json:"algorithm"`                    // algorithm (''|holtwinters), empty means threshold
+	AlgoParams       string `column:"algo_params" json:"-"`         // params algorithm need
+	Delay            int    `column:"delay" json:"delay"`                        // Time (in seconds) to delay evaluation
 	Severity         int    `column:"severity" json:"severity"`                     //Severity 0:Emergency 1:Warning 2:Notice
 	Disabled         int    `column:"disabled" json:"disabled"`                     //Disabled 0:enabled 1:disabled
 	PromForDuration  int    `column:"prom_for_duration" json:"prom_for_duration"`   //PromForDuration prometheus for, unit:s
@@ -56,6 +61,7 @@ type AlertRule struct {
 	RecoverDuration      int64       `json:"recover_duration"`    // unit: s
 	CallbacksJSON        []string    `json:"callbacks"`           // for fe
 	AppendTagsJSON       []string    `json:"append_tags"`         // for fe
+	AlgoParamsJson   interface{} 	 `json:"algo_params"`         //
 }
 
 //GetTableName 获取表名称
@@ -168,7 +174,11 @@ func (ar *AlertRule) Update(arf AlertRule) error {
 		}
 	}
 
-	arf.FE2DB()
+	err := arf.FE2DB()
+	if err != nil {
+		return err
+	}
+
 	arf.Id = ar.Id
 	arf.GroupId = ar.GroupId
 	arf.CreateAt = ar.CreateAt
@@ -249,12 +259,19 @@ func (ar *AlertRule) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	return nil
 }
 
-func (ar *AlertRule) FE2DB() {
+func (ar *AlertRule) FE2DB() error {
 	ar.EnableDaysOfWeek = strings.Join(ar.EnableDaysOfWeekJSON, " ")
 	ar.NotifyChannels = strings.Join(ar.NotifyChannelsJSON, " ")
 	ar.NotifyGroups = strings.Join(ar.NotifyGroupsJSON, " ")
 	ar.Callbacks = strings.Join(ar.CallbacksJSON, " ")
 	ar.AppendTags = strings.Join(ar.AppendTagsJSON, " ")
+	algoParamsByte, err := json.Marshal(ar.AlgoParamsJson)
+	if err != nil {
+		return fmt.Errorf("marshal algo_params err:%v", err)
+	}
+
+	ar.AlgoParams = string(algoParamsByte)
+	return nil
 }
 
 func (ar *AlertRule) DB2FE() {
@@ -263,6 +280,7 @@ func (ar *AlertRule) DB2FE() {
 	ar.NotifyGroupsJSON = strings.Fields(ar.NotifyGroups)
 	ar.CallbacksJSON = strings.Fields(ar.Callbacks)
 	ar.AppendTagsJSON = strings.Fields(ar.AppendTags)
+	json.Unmarshal([]byte(ar.AlgoParams), &ar.AlgoParamsJson)
 }
 
 func AlertRuleDels(ids []int64, busiGroupId int64) error {
@@ -327,8 +345,8 @@ func AlertRuleGets(groupId int64) ([]AlertRule, error) {
 func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
-	// session := DB().Where("disabled = ?", 0)
-	finder.Append(" Where disabled = ?", 0)
+	// session := DB().Where("disabled = ? and prod = ?", 0, "")
+	finder.Append(" Where disabled = ? and prod = ?", 0, "")
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
 		finder.Append(" and cluster = ?", cluster)
@@ -337,6 +355,20 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 	lst := make([]*AlertRule, 0)
 	err := zorm.Query(ctx, finder, &lst, nil)
 	// err := session.Find(&lst).Error
+	if err == nil {
+		for i := 0; i < len(lst); i++ {
+			lst[i].DB2FE()
+		}
+	}
+
+	return lst, err
+}
+
+func AlertRulesGetByProds(prods []string) ([]*AlertRule, error) {
+	session := DB().Where("disabled = ? and prod IN (?)", 0, prods)
+
+	var lst []*AlertRule
+	err := session.Find(&lst).Error
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
@@ -392,13 +424,14 @@ func AlertRuleGetName(id int64) (string, error) {
 }
 
 func AlertRuleStatistics(cluster string) (*Statistics, error) {
-	// session := DB().Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ?", 0)
+	// session := DB().Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ? and prod = ?", 0, "")
 
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "count(*) as total, max(update_at) as last_updated")
+	finder.Append(" Where disabled = ? and prod = ?", 0, "")
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" Where cluster = ?", cluster)
+		finder.Append(" And cluster = ?", cluster)
 	}
 
 	stats := make([]*Statistics, 0)

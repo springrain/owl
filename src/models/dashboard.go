@@ -250,3 +250,9 @@ func DashboardGetsByIds(ids []int64) ([]Dashboard, error) {
 
 	return lst, err
 }
+
+func DashboardGetAll() ([]Dashboard, error) {
+	var lst []Dashboard
+	err := DB().Find(&lst).Error
+	return lst, err
+}

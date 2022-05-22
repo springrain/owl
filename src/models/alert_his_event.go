@@ -24,6 +24,8 @@ type AlertHisEvent struct {
 	RuleId           int64  `column:"rule_id" json:"rule_id"`
 	RuleName         string `column:"rule_name" json:"rule_name"`
 	RuleNote         string `column:"rule_note" json:"rule_note"`
+	RuleProd         string `column:"rule_prod" json:"rule_prod"`
+	RuleAlgo         string `column:"rule_algo" json:"rule_algo"`
 	Severity         int    `column:"severity" json:"severity"`
 	PromForDuration  int    `column:"prom_for_duration" json:"prom_for_duration"`
 	PromQl           string `column:"prom_ql" json:"prom_ql"`

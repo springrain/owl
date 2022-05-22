@@ -12,7 +12,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// DBConfig GORM DBConfig
+// DBConfig ZORM DBConfig
 type DBConfig struct {
 	Debug        bool
 	DBType       string

@@ -3,14 +3,18 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/prometheus/common/model"
 	"github.com/toolkits/pkg/logger"
+	"github.com/toolkits/pkg/net/httplib"
 	"github.com/toolkits/pkg/str"
 
 	"github.com/didi/nightingale/v5/src/models"
+	"github.com/didi/nightingale/v5/src/server/common/conv"
 	"github.com/didi/nightingale/v5/src/server/config"
 	"github.com/didi/nightingale/v5/src/server/memsto"
 	"github.com/didi/nightingale/v5/src/server/naming"
@@ -88,6 +92,11 @@ func (r RuleEval) Start() {
 	}
 }
 
+type AnomalyPoint struct {
+	Data model.Matrix `json:"data"`
+	Err  string       `json:"error"`
+}
+
 func (r RuleEval) Work() {
 	promql := strings.TrimSpace(r.rule.PromQl)
 	if promql == "" {
@@ -95,18 +104,40 @@ func (r RuleEval) Work() {
 		return
 	}
 
-	value, warnings, err := reader.Reader.Client.Query(context.Background(), promql, time.Now())
-	if err != nil {
-		logger.Errorf("rule_eval:%d promql:%s, error:%v", r.RuleID(), promql, err)
-		return
+	var value model.Value
+	var err error
+	if r.rule.Algorithm == "" {
+		var warnings reader.Warnings
+		value, warnings, err = reader.Reader.Client.Query(context.Background(), promql, time.Now())
+		if err != nil {
+			logger.Errorf("rule_eval:%d promql:%s, error:%v", r.RuleID(), promql, err)
+			return
+		}
+
+		if len(warnings) > 0 {
+			logger.Errorf("rule_eval:%d promql:%s, warnings:%v", r.RuleID(), promql, warnings)
+			return
+		}
+	} else {
+		var res AnomalyPoint
+		count := len(config.C.AnomalyDataApi)
+		for _, i := range rand.Perm(count) {
+			url := fmt.Sprintf("%s?rid=%d", config.C.AnomalyDataApi[i], r.rule.Id)
+			err = httplib.Get(url).SetTimeout(time.Duration(3000) * time.Millisecond).ToJSON(&res)
+			if err != nil {
+				logger.Errorf("curl %s fail: %v", url, err)
+				continue
+			}
+			if res.Err != "" {
+				logger.Errorf("curl %s fail: %s", url, res.Err)
+				continue
+			}
+			value = res.Data
+			logger.Debugf("curl %s get: %+v", url, res.Data)
+		}
 	}
 
-	if len(warnings) > 0 {
-		logger.Errorf("rule_eval:%d promql:%s, warnings:%v", r.RuleID(), promql, warnings)
-		return
-	}
-
-	r.judge(ConvertVectors(value))
+	r.judge(conv.ConvertVectors(value))
 }
 
 type WorkersType struct {
@@ -172,7 +203,7 @@ func (ws *WorkersType) Build(rids []int64) {
 	}
 }
 
-func (r RuleEval) judge(vectors []Vector) {
+func (r RuleEval) judge(vectors []conv.Vector) {
 	// 有可能rule的一些配置已经发生变化，比如告警接收人、callbacks等
 	// 这些信息的修改是不会引起worker restart的，但是确实会影响告警处理逻辑
 	// 所以，这里直接从memsto.AlertRuleCache中获取并覆盖
@@ -249,6 +280,8 @@ func (r RuleEval) judge(vectors []Vector) {
 		event.RuleId = r.rule.Id
 		event.RuleName = r.rule.Name
 		event.RuleNote = r.rule.Note
+		event.RuleProd = r.rule.Prod
+		event.RuleAlgo = r.rule.Algorithm
 		event.Severity = r.rule.Severity
 		event.PromForDuration = r.rule.PromForDuration
 		event.PromQl = r.rule.PromQl
@@ -363,6 +396,8 @@ func (r RuleEval) recoverRule(alertingKeys map[string]struct{}, now int64) {
 		// 当然，其实rule的各个字段都可能发生变化了，都更新一下吧
 		event.RuleName = r.rule.Name
 		event.RuleNote = r.rule.Note
+		event.RuleProd = r.rule.Prod
+		event.RuleAlgo = r.rule.Algorithm
 		event.Severity = r.rule.Severity
 		event.PromForDuration = r.rule.PromForDuration
 		event.PromQl = r.rule.PromQl
@@ -386,7 +421,7 @@ func (r RuleEval) pushEventToQueue(event *models.AlertCurEvent) {
 	}
 
 	promstat.CounterAlertsTotal.WithLabelValues(config.C.ClusterName).Inc()
-	logEvent(event, "push_queue")
+	LogEvent(event, "push_queue")
 	if !EventQueue.PushFront(event) {
 		logger.Warningf("event_push_queue: queue is full")
 	}
