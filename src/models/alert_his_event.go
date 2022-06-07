@@ -113,11 +113,12 @@ func (e *AlertHisEvent) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	return nil
 }
 
-func AlertHisEventTotal(bgid, stime, etime int64, severity int, recovered int, clusters []string, query string) (int64, error) {
+func AlertHisEventTotal(prod string, bgid, stime, etime int64, severity int, recovered int, clusters []string, query string) (int64, error) {
+	// session := DB().Model(&AlertHisEvent{}).Where("last_eval_time between ? and ? and rule_prod = ?", stime, etime, prod)
 
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(AlertHisEventStructTableName, "count(*)")
-	finder.Append("Where last_eval_time between ? and ?", stime, etime)
+	finder.Append("Where last_eval_time between ? and ? and rule_prod = ?", stime, etime, prod)
 	if bgid > 0 {
 		finder.Append(" and group_id = ?", bgid)
 	}
@@ -148,7 +149,7 @@ func AlertHisEventTotal(bgid, stime, etime int64, severity int, recovered int, c
 	return Count(finder)
 }
 
-func AlertHisEventGets(bgid, stime, etime int64, severity int, recovered int, clusters []string, query string, limit, offset int) ([]AlertHisEvent, error) {
+func AlertHisEventGets(prod string, bgid, stime, etime int64, severity int, recovered int, clusters []string, query string, limit, offset int) ([]AlertHisEvent, error) {
 
 	ctx := getCtx()
 	//构造查询用的finder
@@ -156,7 +157,7 @@ func AlertHisEventGets(bgid, stime, etime int64, severity int, recovered int, cl
 	page := zorm.NewPage()
 	page.PageNo = offset/limit + 1 //查询第1页,默认是1
 	page.PageSize = limit
-	finder.Append("Where last_eval_time between ? and ? ", stime, etime)
+	finder.Append("Where last_eval_time between ? and ? and rule_prod = ?", stime, etime, prod)
 	if bgid > 0 {
 		finder.Append(" and group_id = ?", bgid)
 	}

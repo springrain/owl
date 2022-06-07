@@ -32,6 +32,7 @@ type AlertMute struct {
 	zorm.EntityStruct
 	Id       int64        `column:"id" json:"id"`
 	GroupId  int64        `column:"group_id" json:"group_id"`
+	Prod     string       `column:"prod" json:"prod"` // product empty means n9e
 	Cluster  string       `column:"cluster" json:"cluster"`
 	Tags     ormx.JSONArr `column:"tags" json:"tags"`
 	Cause    string       `column:"cause" json:"cause"`
@@ -55,19 +56,40 @@ func (entity *AlertMute) GetPKColumnName() string {
 	return "id"
 }
 
-func AlertMuteGets(groupId int64) (lst []AlertMute, err error) {
-	// err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+func AlertMuteGets(prods []string, bgid int64, query string) (lst []AlertMute, err error) {
+	// session := DB().Where("group_id = ? and prod in (?)", bgid, prods)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertMuteStructTableName)
-	finder.Append("Where group_id=?", groupId)
+	finder.Append("Where group_id = ? and prod in (?)", bgid, prods)
+
+	if query != "" {
+		arr := strings.Fields(query)
+		for i := 0; i < len(arr); i++ {
+			qarg := "%" + arr[i] + "%"
+			// session = session.Where("cause like ?", qarg, qarg)
+			finder.Append(" And cause like ?", qarg)
+		}
+	}
+
 	finder.Append(" Order by id desc")
 
 	err = zorm.Query(ctx, finder, &lst, nil)
 	return
 }
 
+func AlertMuteGetsByBG(groupId int64) (lst []AlertMute, err error) {
+	// err = DB().Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName) // select * from t_demo
+	finder.Append("Where group_id=?", groupId)
+	finder.Append(" Order by id desc")
+	err := zorm.Query(ctx, finder, &lst, nil)
+	return
+}
+
 func (m *AlertMute) Verify() error {
-	if m.GroupId <= 0 {
+	if m.GroupId < 0 {
 		return errors.New("group_id invalid")
 	}
 

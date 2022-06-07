@@ -25,11 +25,11 @@ func alertRuleGets(c *gin.Context) {
 	ginx.NewRender(c).Data(ars, err)
 }
 
-func alertRulesGetByProds(c *gin.Context) {
-	prods := ginx.QueryStr(c, "prods", "")
-	arr := strings.Split(prods, ",")
+func alertRulesGetByService(c *gin.Context) {
+	prods := strings.Fields(ginx.QueryStr(c, "prods", ""))
+	query := ginx.QueryStr(c, "query", "")
 
-	ars, err := models.AlertRulesGetByProds(arr)
+	ars, err := models.AlertRulesGetsBy(prods, query)
 	if err == nil {
 		cache := make(map[int64]*models.UserGroup)
 		for i := 0; i < len(ars); i++ {
@@ -65,8 +65,33 @@ func alertRuleAddByService(c *gin.Context) {
 	if count == 0 {
 		ginx.Bomb(http.StatusBadRequest, "input json is empty")
 	}
-	reterr := alertRuleAdd(lst, "", 0, c.GetHeader("X-Language"))
+	reterr := alertRuleAddForService(lst, "")
 	ginx.NewRender(c).Data(reterr, nil)
+}
+
+func alertRuleAddForService(lst []models.AlertRule, username string) map[string]string {
+	count := len(lst)
+	// alert rule name -> error string
+	reterr := make(map[string]string)
+	for i := 0; i < count; i++ {
+		lst[i].Id = 0
+		if username != "" {
+			lst[i].CreateBy = username
+			lst[i].UpdateBy = username
+		}
+
+		if err := lst[i].FE2DB(); err != nil {
+			reterr[lst[i].Name] = err.Error()
+			continue
+		}
+
+		if err := lst[i].Add(); err != nil {
+			reterr[lst[i].Name] = err.Error()
+		} else {
+			reterr[lst[i].Name] = ""
+		}
+	}
+	return reterr
 }
 
 func alertRuleAdd(lst []models.AlertRule, username string, bgid int64, lang string) map[string]string {
@@ -102,6 +127,13 @@ func alertRuleDel(c *gin.Context) {
 
 	// param(busiGroupId) for protect
 	ginx.NewRender(c).Message(models.AlertRuleDels(f.Ids, ginx.UrlParamInt64(c, "id")))
+}
+
+func alertRuleDelByService(c *gin.Context) {
+	var f idsForm
+	ginx.BindJSON(c, &f)
+	f.Verify()
+	ginx.NewRender(c).Message(models.AlertRuleDels(f.Ids))
 }
 
 func alertRulePutByFE(c *gin.Context) {

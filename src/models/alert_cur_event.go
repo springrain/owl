@@ -272,12 +272,13 @@ func (e *AlertCurEvent) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	return nil
 }
 
-func AlertCurEventTotal(bgid, stime, etime int64, severity int, clusters []string, query string) (int64, error) {
-	// session := DB().Model(&AlertCurEvent{}).Where("trigger_time between ? and ? and group_id = ?", stime, etime, bgid)
+func AlertCurEventTotal(prod string, bgid, stime, etime int64, severity int, clusters []string, query string) (int64, error) {
+
+	// session := DB().Model(&AlertCurEvent{}).Where("trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
 	// return Count(session)
 
 	finder := zorm.NewSelectFinder(AlertCurEventStructTableName, "count(*)")
-	finder.Append("Where trigger_time between ? and ?", stime, etime)
+	finder.Append("Where trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
 
 	if bgid > 0 {
 		finder.Append("And group_id = ?", bgid)
@@ -311,12 +312,14 @@ func AlertCurEventTotal(bgid, stime, etime int64, severity int, clusters []strin
 
 }
 
-func AlertCurEventGets(bgid, stime, etime int64, severity int, clusters []string, query string, limit, offset int) ([]AlertCurEvent, error) {
+func AlertCurEventGets(prod string, bgid, stime, etime int64, severity int, clusters []string, query string, limit, offset int) ([]AlertCurEvent, error) {
+	// session := DB().Where("trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
+
 	lst := make([]AlertCurEvent, 0)
 	ctx := getCtx()
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(AlertCurEventStructTableName) // select * from t_demo
-	finder.Append("Where trigger_time between ? and ? ", stime, etime)
+	finder.Append("Where trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
 
 	if bgid > 0 {
 		finder.Append(" and group_id = ?", bgid)

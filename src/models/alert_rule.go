@@ -20,6 +20,7 @@ const AlertRuleStructTableName = "alert_rule"
 
 // AlertRuleStruct
 type AlertRule struct {
+<<<<<<< HEAD
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id               int64  `column:"id" json:"id"`
@@ -68,6 +69,45 @@ type AlertRule struct {
 //IEntityStruct 接口的方法,实体类需要实现!!!
 func (entity *AlertRule) GetTableName() string {
 	return AlertRuleStructTableName
+=======
+	Id                   int64       `json:"id" gorm:"primaryKey"`
+	GroupId              int64       `json:"group_id"`                     // busi group id
+	Cluster              string      `json:"cluster"`                      // take effect by cluster
+	Name                 string      `json:"name"`                         // rule name
+	Note                 string      `json:"note"`                         // will sent in notify
+	Prod                 string      `json:"prod"`                         // product empty means n9e
+	Algorithm            string      `json:"algorithm"`                    // algorithm (''|holtwinters), empty means threshold
+	AlgoParams           string      `json:"-" gorm:"algo_params"`         // params algorithm need
+	AlgoParamsJson       interface{} `json:"algo_params" gorm:"-"`         //
+	Delay                int         `json:"delay"`                        // Time (in seconds) to delay evaluation
+	Severity             int         `json:"severity"`                     // 1: Emergency 2: Warning 3: Notice
+	Disabled             int         `json:"disabled"`                     // 0: enabled, 1: disabled
+	PromForDuration      int         `json:"prom_for_duration"`            // prometheus for, unit:s
+	PromQl               string      `json:"prom_ql"`                      // just one ql
+	PromEvalInterval     int         `json:"prom_eval_interval"`           // unit:s
+	EnableStime          string      `json:"enable_stime"`                 // e.g. 00:00
+	EnableEtime          string      `json:"enable_etime"`                 // e.g. 23:59
+	EnableDaysOfWeek     string      `json:"-"`                            // split by space: 0 1 2 3 4 5 6
+	EnableDaysOfWeekJSON []string    `json:"enable_days_of_week" gorm:"-"` // for fe
+	EnableInBG           int         `json:"enable_in_bg"`                 // 0: global 1: enable one busi-group
+	NotifyRecovered      int         `json:"notify_recovered"`             // whether notify when recovery
+	NotifyChannels       string      `json:"-"`                            // split by space: sms voice email dingtalk wecom
+	NotifyChannelsJSON   []string    `json:"notify_channels" gorm:"-"`     // for fe
+	NotifyGroups         string      `json:"-"`                            // split by space: 233 43
+	NotifyGroupsObj      []UserGroup `json:"notify_groups_obj" gorm:"-"`   // for fe
+	NotifyGroupsJSON     []string    `json:"notify_groups" gorm:"-"`       // for fe
+	NotifyRepeatStep     int         `json:"notify_repeat_step"`           // notify repeat interval, unit: min
+	RecoverDuration      int64       `json:"recover_duration"`             // unit: s
+	Callbacks            string      `json:"-"`                            // split by space: http://a.com/api/x http://a.com/api/y'
+	CallbacksJSON        []string    `json:"callbacks" gorm:"-"`           // for fe
+	RunbookUrl           string      `json:"runbook_url"`                  // sop url
+	AppendTags           string      `json:"-"`                            // split by space: service=n9e mod=api
+	AppendTagsJSON       []string    `json:"append_tags" gorm:"-"`         // for fe
+	CreateAt             int64       `json:"create_at"`
+	CreateBy             string      `json:"create_by"`
+	UpdateAt             int64       `json:"update_at"`
+	UpdateBy             string      `json:"update_by"`
+>>>>>>> upstream/main
 }
 
 //GetPKColumnName 获取数据库表的主键字段名称.因为要兼容Map,只能是数据库的字段名称
@@ -81,7 +121,7 @@ func (entity *AlertRule) GetPKColumnName() string {
 }
 
 func (ar *AlertRule) Verify() error {
-	if ar.GroupId <= 0 {
+	if ar.GroupId < 0 {
 		return fmt.Errorf("GroupId(%d) invalid", ar.GroupId)
 	}
 
@@ -283,6 +323,7 @@ func (ar *AlertRule) DB2FE() {
 	json.Unmarshal([]byte(ar.AlgoParams), &ar.AlgoParamsJson)
 }
 
+<<<<<<< HEAD
 func AlertRuleDels(ids []int64, busiGroupId int64) error {
 	ctx := getCtx()
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
@@ -303,6 +344,17 @@ func AlertRuleDels(ids []int64, busiGroupId int64) error {
 				AlertCurEvent.RuleId = ids[i]
 				_, err = zorm.Delete(ctx, AlertCurEvent)
 			}
+=======
+func AlertRuleDels(ids []int64, bgid ...int64) error {
+	for i := 0; i < len(ids); i++ {
+		session := DB().Where("id = ?", ids[i])
+		if len(bgid) > 0 {
+			session = session.Where("group_id = ?", bgid[0])
+		}
+		ret := session.Delete(&AlertRule{})
+		if ret.Error != nil {
+			return ret.Error
+>>>>>>> upstream/main
 		}
 		return nil, err
 	})
@@ -364,13 +416,23 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 	return lst, err
 }
 
-func AlertRulesGetByProds(prods []string) ([]*AlertRule, error) {
+func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
 	// session := DB().Where("disabled = ? and prod IN (?)", 0, prods)
 	// err := session.Find(&lst).Error
 	lst := make([]*AlertRule, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
 	finder.Append(" Where disabled = ? and prod IN (?)", 0, prods)
+
+	if query != "" {
+		arr := strings.Fields(query)
+		for i := 0; i < len(arr); i++ {
+			qarg := "%" + arr[i] + "%"
+			// session = session.Where("append_tags like ?", qarg)
+			finder.Append(" And append_tags like ?", qarg)
+		}
+	}
+
 	err := zorm.Query(ctx, finder, &lst, nil)
 	
 	if err == nil {
