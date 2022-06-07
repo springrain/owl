@@ -84,7 +84,7 @@ func AlertMuteGetsByBG(groupId int64) (lst []AlertMute, err error) {
 	finder := zorm.NewSelectFinder(AlertMuteStructTableName) // select * from t_demo
 	finder.Append("Where group_id=?", groupId)
 	finder.Append(" Order by id desc")
-	err := zorm.Query(ctx, finder, &lst, nil)
+	err = zorm.Query(ctx, finder, &lst, nil)
 	return
 }
 

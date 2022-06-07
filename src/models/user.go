@@ -23,7 +23,6 @@ const UserStructTableName = "users"
 
 // User
 type User struct {
-<<<<<<< HEAD
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id       int64        `column:"id" json:"id"`
@@ -35,6 +34,7 @@ type User struct {
 	Portrait string       `column:"portrait" json:"portrait"`
 	Roles    string       `column:"roles" json:"-"`
 	Contacts ormx.JSONObj `column:"contacts" json:"contacts"`
+	Maintainer int        `column:"maintainer" json:"maintainer"`     // 是否给管理员发消息 0:not send 1:send
 	CreateAt int64        `column:"create_at" json:"create_at"`
 	CreateBy string       `column:"create_by" json:"create_by"`
 	UpdateAt int64        `column:"update_at" json:"update_at"`
@@ -50,24 +50,6 @@ type User struct {
 //IEntityStruct 接口的方法,实体类需要实现!!!
 func (entity *User) GetTableName() string {
 	return UserStructTableName
-=======
-	Id         int64        `json:"id" gorm:"primaryKey"`
-	Username   string       `json:"username"`
-	Nickname   string       `json:"nickname"`
-	Password   string       `json:"-"`
-	Phone      string       `json:"phone"`
-	Email      string       `json:"email"`
-	Portrait   string       `json:"portrait"`
-	Roles      string       `json:"-"`              // 这个字段写入数据库
-	RolesLst   []string     `json:"roles" gorm:"-"` // 这个字段和前端交互
-	Contacts   ormx.JSONObj `json:"contacts"`       // 内容为 map[string]string 结构
-	Maintainer int          `json:"maintainer"`     // 是否给管理员发消息 0:not send 1:send
-	CreateAt   int64        `json:"create_at"`
-	CreateBy   string       `json:"create_by"`
-	UpdateAt   int64        `json:"update_at"`
-	UpdateBy   string       `json:"update_by"`
-	Admin      bool         `json:"admin" gorm:"-"` // 方便前端使用
->>>>>>> upstream/main
 }
 
 //GetPKColumnName 获取数据库表的主键字段名称.因为要兼容Map,只能是数据库的字段名称
