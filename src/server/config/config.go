@@ -14,8 +14,6 @@ import (
 	"github.com/didi/nightingale/v5/src/pkg/httpx"
 	"github.com/didi/nightingale/v5/src/pkg/logx"
 	"github.com/didi/nightingale/v5/src/pkg/ormx"
-	"github.com/didi/nightingale/v5/src/server/reader"
-	"github.com/didi/nightingale/v5/src/server/writer"
 	"github.com/didi/nightingale/v5/src/storage"
 )
 
@@ -126,19 +124,63 @@ type Config struct {
 	AnomalyDataApi    []string
 	EngineDelay       int64
 	DisableUsageReport bool
-	Log               logx.Config
-	HTTP              httpx.Config
-	BasicAuth         gin.Accounts
-	SMTP              SMTPConfig
-	Heartbeat         HeartbeatConfig
-	Alerting          Alerting
-	NoData            NoData
-	Redis             storage.RedisConfig
-	DB                ormx.DBConfig
-	WriterOpt         writer.GlobalOpt
-	Writers           []writer.Options
-	Reader            reader.Options
-	Ibex              Ibex
+	Log                logx.Config
+	HTTP               httpx.Config
+	BasicAuth          gin.Accounts
+	SMTP               SMTPConfig
+	Heartbeat          HeartbeatConfig
+	Alerting           Alerting
+	NoData             NoData
+	Redis              storage.RedisConfig
+	DB                 ormx.DBConfig
+	WriterOpt          WriterGlobalOpt
+	Writers            []WriterOptions
+	Reader             ReaderOptions
+	Ibex               Ibex
+}
+
+type ReaderOptions struct {
+	Url           string
+	BasicAuthUser string
+	BasicAuthPass string
+
+	Timeout               int64
+	DialTimeout           int64
+	TLSHandshakeTimeout   int64
+	ExpectContinueTimeout int64
+	IdleConnTimeout       int64
+	KeepAlive             int64
+
+	MaxConnsPerHost     int
+	MaxIdleConns        int
+	MaxIdleConnsPerHost int
+
+	Headers []string
+}
+
+type WriterOptions struct {
+	Url           string
+	BasicAuthUser string
+	BasicAuthPass string
+
+	Timeout               int64
+	DialTimeout           int64
+	TLSHandshakeTimeout   int64
+	ExpectContinueTimeout int64
+	IdleConnTimeout       int64
+	KeepAlive             int64
+
+	MaxConnsPerHost     int
+	MaxIdleConns        int
+	MaxIdleConnsPerHost int
+
+	Headers []string
+}
+
+type WriterGlobalOpt struct {
+	QueueCount   int
+	QueueMaxSize int
+	QueuePopSize int
 }
 
 type HeartbeatConfig struct {

@@ -54,6 +54,7 @@ type AlertCurEvent struct {
 	NotifyUsersObj     []*User           `json:"notify_users_obj"`  // for notify.py
 	LastEvalTime       int64             `json:"last_eval_time"`    // for notify.py 上次计算的时间
 	LastSentTime       int64             `json:"last_sent_time"`    // 上次发送时间
+	NotifyCurNumber    int               `json:"notify_cur_number"` // notify: current number
 }
 
 func (entity *AlertCurEvent) GetTableName() string {

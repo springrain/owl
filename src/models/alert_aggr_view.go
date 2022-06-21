@@ -102,14 +102,19 @@ func (v *AlertAggrView) Add() error {
 	return Insert(v)
 }
 
-func (v *AlertAggrView) Update(name, rule string) error {
+func (v *AlertAggrView) Update(name, rule string, cate int, createBy int64) error {
 	if err := v.Verify(); err != nil {
 		return err
 	}
 
 	ctx := getCtx()
 	finder := zorm.NewUpdateFinder(AlertAggrViewStructTableName)
-	finder.Append("name=?,rule=?,update_at=? WHERE id=?", name, rule, time.Now().Unix(), v.Id)
+	finder.Append("name=?,rule=?,update_at=?,cate=?", name, rule, time.Now().Unix(), cate)
+	if v.CreateBy == 0 {
+		// v.CreateBy = createBy
+		finder.Append("create_by=?", createBy)
+	}
+	finder.Append(" WHERE id=?", v.Id)
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		_, err := zorm.UpdateFinder(ctx, finder)
 		//如果返回的err不是nil,事务就会回滚
@@ -120,19 +125,30 @@ func (v *AlertAggrView) Update(name, rule string) error {
 }
 
 // AlertAggrViewDel: userid for safe delete
-func AlertAggrViewDel(ids []int64, createBy interface{}) error {
+func AlertAggrViewDel(ids []int64, createBy ...interface{}) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	ctx := getCtx()
+
+	if len(createBy) > 0 {
+		// return DB().Where("id in ? and create_by = ?", ids, createBy).Delete(new(AlertAggrView)).Error
+		_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+			finder := zorm.NewDeleteFinder(AlertAggrViewStructTableName)
+			finder.Append(" Where id in ? and create_by = ?", ids, createBy)
+			_, err := zorm.UpdateFinder(ctx, finder)
+			return nil, err
+		})
+		return err
+	}
+	// return DB().Where("id in ?", ids).Delete(new(AlertAggrView)).Error
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		finder := zorm.NewDeleteFinder(AlertAggrViewStructTableName)
-		finder.Append(" Where id in ? and create_by = ?", ids, createBy)
+		finder.Append(" Where id in ?", ids)
 		_, err := zorm.UpdateFinder(ctx, finder)
 		return nil, err
 	})
 	return err
-	// return DB().Where("id in ? and create_by = ?", ids, createBy).Delete(new(AlertAggrView)).Error
 }
 
 func AlertAggrViewGets(createBy interface{}) ([]AlertAggrView, error) {

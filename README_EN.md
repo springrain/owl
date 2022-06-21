@@ -32,33 +32,27 @@ Nightingale is an cloud-native monitoring system by All-In-On design, support en
 - For more information about open-falcon and Nightingale, please refer to read [Ten features and trends of cloud-native monitoring](https://mp.weixin.qq.com/s?__biz=MzkzNjI5OTM5Nw==&mid=2247483738&idx=1&sn=e8bdbb974a2cd003c1abcc2b5405dd18&chksm=c2a19fb0f5d616a63185cd79277a79a6b80118ef2185890d0683d2bb20451bd9303c78d083c5#rd)。
 
 ## Quickstart
-- [n9e.github.io/quickstart](https://n9e.github.io/quickstart/)
+- [n9e.github.io/quickstart](https://n9e.github.io/docs/install/compose/)
 
 ## Documentation
 - [n9e.github.io](https://n9e.github.io/)
 
 ## Example of use
-#### You can import and set MySQL-related alert rules:
-<img src="doc/img/mysql-alerts.png" width="680">
 
-#### You can import and set the host-related dashboard：
-<img src="doc/img/n9e-node-dashboard.png" width="680">
-
-#### You can also easily view all active alerts and historical alerts in Nightingale:
-<img src="https://n9e.github.io/intro/alert-events.png" width="680">
+<img src="doc/img/intro.gif" width="680">
 
 ## System Architecture
 #### A typical Nightingale deployment architecture:
-<img src="https://n9e.github.io/intro/arch-system.png" width="680">
+<img src="doc/img/arch-system.png" width="680">
 
 #### Typical deployment architecture using VictoriaMetrics as storage:
-<img src="https://n9e.github.io/fc-monitoring-vm.png" width="680">
+<img src="doc/img/install-vm.png" width="680">
 
 ## Contact us and feedback questions
 - We recommend that you use [github issue](https://github.com/didi/nightingale/issues) as the preferred channel for issue feedback and requirement submission;
 - You can join our WeChat group - [Nightingale WeChat Group](https://s3-gz01.didistatic.com/n9e-pub/image/n9e-wx.png);
 
-<img src="https://n9e.github.io/cloudmon.png" width="180">
+<img src="doc/img/wx.jpg" width="180">
 
 
 ## Contributing
@@ -69,14 +63,6 @@ We welcome your participation in the Nightingale open source project and open so
 - Join our community events => [Nightingale wechat group](https://s3-gz01.didistatic.com/n9e-pub/image/n9e-wx.png)
 - Submit code to make Nightingale better =>[github PR](https://github.com/didi/nightingale/pulls)
 
-## TODO
-- [x] deploy nightingale in docker
-- [x] export /metrics endpoint
-- [x] notify.py support feishu
-- [ ] notify.py support sms
-- [ ] notify.py support voice
-- [x] support remote write api
-- [ ] support pushgateway api
 
 ## License
 Nightingale with [Apache License V2.0](https://github.com/didi/nightingale/blob/main/LICENSE) open source license.

@@ -39,7 +39,7 @@ func loopFilterRules(ctx context.Context) {
 
 func filterRules() {
 	ids := memsto.AlertRuleCache.GetRuleIds()
-	logger.Infof("AlertRuleCache.GetRuleIds success，ids.len: %d", len(ids))
+	logger.Debugf("AlertRuleCache.GetRuleIds success，ids.len: %d", len(ids))
 
 	count := len(ids)
 	mines := make([]int64, 0, count)
@@ -84,7 +84,7 @@ func (r RuleEval) Start() {
 			return
 		default:
 			r.Work()
-			logger.Infof("rule executed，rule_id=%d", r.RuleID())
+			logger.Debugf("rule executed，rule_id=%d", r.RuleID())
 			interval := r.rule.PromEvalInterval
 			if interval <= 0 {
 				interval = 10
@@ -364,9 +364,22 @@ func (r RuleEval) fireEvent(event *models.AlertCurEvent) {
 
 		// 之前发送过告警了，这次是否要继续发送，要看是否过了通道静默时间
 		if event.LastEvalTime > fired.LastSentTime+int64(r.rule.NotifyRepeatStep)*60 {
-			r.pushEventToQueue(event)
+			if r.rule.NotifyMaxNumber == 0 {
+				// 最大可以发送次数如果是0，表示不想限制最大发送次数，一直发即可
+				r.pushEventToQueue(event)
+			} else {
+				// 有最大发送次数的限制，就要看已经发了几次了，是否达到了最大发送次数
+				if fired.NotifyCurNumber >= r.rule.NotifyMaxNumber {
+					return
+				} else {
+					event.NotifyCurNumber = fired.NotifyCurNumber + 1
+					r.pushEventToQueue(event)
+				}
+			}
+
 		}
 	} else {
+		event.NotifyCurNumber = 1
 		r.pushEventToQueue(event)
 	}
 }

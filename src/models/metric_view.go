@@ -66,7 +66,7 @@ func (v *MetricView) Add() error {
 	return Insert(v)
 }
 
-func (v *MetricView) Update(name, configs string, cate int) error {
+func (v *MetricView) Update(name, configs string, cate int, createBy int64) error {
 	if err := v.Verify(); err != nil {
 		return err
 	}
@@ -76,6 +76,7 @@ func (v *MetricView) Update(name, configs string, cate int) error {
 	v.Configs = configs
 	v.Cate = cate
 
+<<<<<<< HEAD
 	// return DB().Model(v).Select("name", "configs", "cate", "update_at").Updates(v).Error
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		_, err := zorm.UpdateNotZeroValue(ctx, v)
@@ -83,6 +84,13 @@ func (v *MetricView) Update(name, configs string, cate int) error {
 		return nil, err
 	})
 	return err
+=======
+	if v.CreateBy == 0 {
+		v.CreateBy = createBy
+	}
+
+	return DB().Model(v).Select("name", "configs", "cate", "update_at", "create_by").Updates(v).Error
+>>>>>>> upstream/main
 }
 
 // MetricViewDel: userid for safe delete

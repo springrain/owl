@@ -43,6 +43,7 @@ type AlertRule struct {
 	NotifyChannels   string `column:"notify_channels" json:"-"`                     //NotifyChannels split by space: sms voice email dingtalk wecom
 	NotifyGroups     string `column:"notify_groups" json:"-"`                       //NotifyGroups split by space: 233 43
 	NotifyRepeatStep int    `column:"notify_repeat_step" json:"notify_repeat_step"` //NotifyRepeatStep unit: min
+	NotifyMaxNumber  int    `column:"notify_max_number" json:"notify_max_number"`   // notify: max number
 	Callbacks        string `column:"callbacks" json:"-"`                           //Callbacks split by space: http://a.com/api/x http://a.com/api/y
 	RunbookUrl       string `column:"runbook_url" json:"runbook_url"`               //RunbookUrl []
 	AppendTags       string `column:"append_tags" json:"-"`                         //AppendTags split by space: service=n9e mod=api
@@ -185,6 +186,10 @@ func (ar *AlertRule) Update(arf AlertRule) error {
 	arf.CreateBy = ar.CreateBy
 	arf.UpdateAt = time.Now().Unix()
 
+	err = arf.Verify()
+	if err != nil {
+		return err
+	}
 	// return DB().Model(ar).Select("*").Updates(arf).Error
 	ctx := getCtx()
 	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
