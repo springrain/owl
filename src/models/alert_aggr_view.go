@@ -135,7 +135,7 @@ func AlertAggrViewDel(ids []int64, createBy ...interface{}) error {
 		// return DB().Where("id in ? and create_by = ?", ids, createBy).Delete(new(AlertAggrView)).Error
 		_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			finder := zorm.NewDeleteFinder(AlertAggrViewStructTableName)
-			finder.Append(" Where id in ? and create_by = ?", ids, createBy)
+			finder.Append(" Where id in (?) and create_by = ?", ids, createBy)
 			_, err := zorm.UpdateFinder(ctx, finder)
 			return nil, err
 		})
@@ -144,7 +144,7 @@ func AlertAggrViewDel(ids []int64, createBy ...interface{}) error {
 	// return DB().Where("id in ?", ids).Delete(new(AlertAggrView)).Error
 	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		finder := zorm.NewDeleteFinder(AlertAggrViewStructTableName)
-		finder.Append(" Where id in ?", ids)
+		finder.Append(" Where id in (?)", ids)
 		_, err := zorm.UpdateFinder(ctx, finder)
 		return nil, err
 	})

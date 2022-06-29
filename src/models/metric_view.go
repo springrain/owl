@@ -97,7 +97,7 @@ func MetricViewDel(ids []int64, createBy ...interface{}) error {
 	if len(createBy) > 0 {
 		_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			finder := zorm.NewDeleteFinder(MetricViewStructTableName)
-			finder.Append(" Where id in ? and create_by = ?", ids, createBy[0])
+			finder.Append(" Where id in (?) and create_by = ?", ids, createBy[0])
 			_, err := zorm.UpdateFinder(ctx, finder)
 			return nil, err
 		})

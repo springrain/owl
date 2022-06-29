@@ -331,7 +331,7 @@ func AlertCurEventGets(prod string, bgid, stime, etime int64, severity int, clus
 	}
 
 	if len(clusters) > 0 {
-		finder.Append("And cluster in ?", clusters)
+		finder.Append("And cluster in (?)", clusters)
 	}
 
 	if query != "" {

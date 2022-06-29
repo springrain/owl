@@ -54,7 +54,7 @@ func BoardPayloadGets(ids []int64) ([]*BoardPayload, error) {
 	arr := make([]*BoardPayload, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(BoardPayloadStructTableName) // select * from t_demo
-	finder.Append("Where id in ?", ids)
+	finder.Append("Where id in (?)", ids)
 	err := zorm.Query(ctx, finder, &arr, nil)
 	return arr, err
 }

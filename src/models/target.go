@@ -409,7 +409,7 @@ func TargetIds(idents []string) ([]int64, error) {
 	// err := DB().Model(&Target{}).Where("ident in ?", idents).Pluck("id", &ret).Error
 	ctx := getCtx()
 	finder := zorm.NewFinder().Append("select id FROM " + TargetStructTableName)
-	finder.Append("Where in (?)", idents)
+	finder.Append("Where ident in (?)", idents)
 	err := zorm.Query(ctx, finder, &idents, nil)
 	return ret, err
 }
