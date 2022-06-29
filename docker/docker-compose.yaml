@@ -79,7 +79,7 @@ services:
       sh -c "/wait && /app/ibex server"
 
   nwebapi:
-    image: ulric2019/nightingale:5.9.2
+    image: ulric2019/nightingale:5.9.3
     container_name: nwebapi
     hostname: nwebapi
     restart: always
@@ -107,7 +107,7 @@ services:
       sh -c "/wait && /app/n9e webapi"
 
   nserver:
-    image: ulric2019/nightingale:5.9.2
+    image: ulric2019/nightingale:5.9.3
     container_name: nserver
     hostname: nserver
     restart: always
@@ -134,18 +134,21 @@ services:
     command: >
       sh -c "/wait && /app/n9e server"
 
-  telegraf:
-    image: "telegraf:1.20.3"
-    container_name: "telegraf"
-    hostname: "telegraf01"
+  categraf:
+    image: "flashcatcloud/categraf:v0.1.9"
+    container_name: "categraf"
+    hostname: "categraf01"
     restart: always
     environment:
       TZ: Asia/Shanghai
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+      HOST_MOUNT_PREFIX: /hostfs
     volumes:
-      - ./telegrafetc/telegraf.conf:/etc/telegraf/telegraf.conf
+      - ./categraf/conf:/etc/categraf/conf
+      - /:/hostfs
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "8125:8125/udp"
-      - "8092:8092/udp"
       - "8094:8094/tcp"
     networks:
       - nightingale
