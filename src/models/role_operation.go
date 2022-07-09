@@ -40,12 +40,11 @@ func RoleHasOperation(roles []string, operation string) (bool, error) {
 	}
 
 	// return Exists(DB().Model(&RoleOperation{}).Where("operation = ? and role_name in ?", operation, roles))
-	ctx := getCtx()
-	demo := &RoleOperation{}
 	finder := zorm.NewSelectFinder(RoleOperationStructTableName)
 	finder.Append("WHERE operation = ? and role_name in (?)", operation, roles)
-	_, err := zorm.QueryRow(ctx, finder, demo)
-	return len(demo.RoleName) > 0, err
+	//查询条数
+	num, err := Count(finder)
+	return num > 0, err
 
 }
 

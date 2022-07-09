@@ -27,10 +27,10 @@ type AlertRule struct {
 	Cluster          string `column:"cluster" json:"cluster"`
 	Name             string `column:"name" json:"name"`
 	Note             string `column:"note" json:"note"`
-	Prod             string `column:"prod" json:"prod"`                         // product empty means n9e
-	Algorithm        string `column:"algorithm" json:"algorithm"`                    // algorithm (''|holtwinters), empty means threshold
-	AlgoParams       string `column:"algo_params" json:"-"`         // params algorithm need
-	Delay            int    `column:"delay" json:"delay"`                        // Time (in seconds) to delay evaluation
+	Prod             string `column:"prod" json:"prod"`                             // product empty means n9e
+	Algorithm        string `column:"algorithm" json:"algorithm"`                   // algorithm (''|holtwinters), empty means threshold
+	AlgoParams       string `column:"algo_params" json:"-"`                         // params algorithm need
+	Delay            int    `column:"delay" json:"delay"`                           // Time (in seconds) to delay evaluation
 	Severity         int    `column:"severity" json:"severity"`                     //Severity 0:Emergency 1:Warning 2:Notice
 	Disabled         int    `column:"disabled" json:"disabled"`                     //Disabled 0:enabled 1:disabled
 	PromForDuration  int    `column:"prom_for_duration" json:"prom_for_duration"`   //PromForDuration prometheus for, unit:s
@@ -62,7 +62,7 @@ type AlertRule struct {
 	RecoverDuration      int64       `json:"recover_duration"`    // unit: s
 	CallbacksJSON        []string    `json:"callbacks"`           // for fe
 	AppendTagsJSON       []string    `json:"append_tags"`         // for fe
-	AlgoParamsJson   interface{} 	 `json:"algo_params"`         //
+	AlgoParamsJson       interface{} `json:"algo_params"`         //
 }
 
 //GetTableName 获取表名称
@@ -321,16 +321,15 @@ func AlertRuleDels(ids []int64, bgid ...int64) error {
 }
 
 func AlertRuleExists(where string, args ...interface{}) (bool, error) {
-	lst := make([]*AlertRule, 0)
-	ctx := getCtx()
 	//构造查询用的finder
-	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "COUNT(*)")
 	if where != "" {
 		finder.Append("Where "+where, args...)
 	}
 
-	err := zorm.Query(ctx, finder, &lst, nil)
-	return len(lst) > 0, err
+	//查询条数
+	num, err := Count(finder)
+	return num > 0, err
 	// return Exists(DB().Model(&AlertRule{}).Where(where, args...))
 }
 
@@ -391,7 +390,7 @@ func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
 	}
 
 	err := zorm.Query(ctx, finder, &lst, nil)
-	
+
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()

@@ -7,7 +7,7 @@ import (
 	"html/template"
 	"strconv"
 	"strings"
-	
+
 	"gitee.com/chunanyong/zorm"
 	"github.com/didi/nightingale/v5/src/pkg/tplx"
 )
@@ -42,6 +42,7 @@ type AlertCurEvent struct {
 	TriggerTime      int64  `column:"trigger_time" json:"trigger_time"`
 	TriggerValue     string `column:"trigger_value" json:"trigger_value"`
 	Tags             string `column:"tags" json:"-"`
+	NotifyCurNumber  int    `column:"notify_cur_number" json:"notify_cur_number"` // notify: current number
 	//------------------数据库字段结束,自定义字段写在下面---------------//
 	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
 	CallbacksJSON      []string          `json:"callbacks"`         // for fe
@@ -54,7 +55,6 @@ type AlertCurEvent struct {
 	NotifyUsersObj     []*User           `json:"notify_users_obj"`  // for notify.py
 	LastEvalTime       int64             `json:"last_eval_time"`    // for notify.py 上次计算的时间
 	LastSentTime       int64             `json:"last_sent_time"`    // 上次发送时间
-	NotifyCurNumber    int               `json:"notify_cur_number"` // notify: current number
 }
 
 func (entity *AlertCurEvent) GetTableName() string {
@@ -206,6 +206,7 @@ func (e *AlertCurEvent) ToHis() *AlertHisEvent {
 		Tags:             e.Tags,
 		RecoverTime:      recoverTime,
 		LastEvalTime:     e.LastEvalTime,
+		NotifyCurNumber:  e.NotifyCurNumber,
 	}
 }
 
@@ -395,7 +396,7 @@ func AlertCurEventExists(where string, args ...interface{}) (bool, error) {
 	if where != "" {
 		finder.Append("Where "+where, args...)
 	}
-	//执行查询
+	//查询条数
 	num, err := Count(finder)
 	return num > 0, err
 

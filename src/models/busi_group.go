@@ -135,80 +135,74 @@ func BusiGroupExists(where string, args ...interface{}) (bool, error) {
 func (bg *BusiGroup) Del() error {
 	// has, err := Exists(DB().Model(&AlertMute{}).Where("group_id=?", bg.Id))
 	ctx := getCtx()
-	al := &AlertMute{}
-	finder := zorm.NewSelectFinder(AlertMuteStructTableName)
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err := zorm.QueryRow(ctx, finder, al)
+	//查询条数
+	num, err := Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some alert mutes still in the BusiGroup")
 	}
 
 	// has, err = Exists(DB().Model(&AlertSubscribe{}).Where("group_id=?", bg.Id))
-	ab := &AlertSubscribe{}
-	finder = zorm.NewSelectFinder(AlertSubscribeStructTableName)
+	finder = zorm.NewSelectFinder(AlertSubscribeStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, ab)
+	//查询条数
+	num, err = Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some alert subscribes still in the BusiGroup")
 	}
 
 	// has, err = Exists(DB().Model(&Target{}).Where("group_id=?", bg.Id))
-	tg := &Target{}
-	finder = zorm.NewSelectFinder(TargetStructTableName)
+	finder = zorm.NewSelectFinder(TargetStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, tg)
+	//查询条数
+	num, err = Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some targets still in the BusiGroup")
 	}
 
 	// has, err = Exists(DB().Model(&Dashboard{}).Where("group_id=?", bg.Id))
-	db := &Dashboard{}
-	finder = zorm.NewSelectFinder(DashboardStructTableName)
+	finder = zorm.NewSelectFinder(DashboardStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, db)
+	//查询条数
+	num, err = Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some dashboards still in the BusiGroup")
 	}
 
 	// has, err = Exists(DB().Model(&TaskTpl{}).Where("group_id=?", bg.Id))
-	tp := &TaskTpl{}
-	finder = zorm.NewSelectFinder(TaskTplStructTableName)
+	finder = zorm.NewSelectFinder(TaskTplStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, tp)
+	//查询条数
+	num, err = Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some recovery scripts still in the BusiGroup")
 	}
 
 	// hasCR, err := Exists(DB().Table("collect_rule").Where("group_id=?", bg.Id))
-	cr := &AlertRule{}
-	finder = zorm.NewSelectFinder(AlertRuleStructTableName)
+	finder = zorm.NewSelectFinder(AlertRuleStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
-	has, err = zorm.QueryRow(ctx, finder, cr)
+	//查询条数
+	num, err = Count(finder)
 	if err != nil {
 		return err
 	}
-
-	if has {
+	if num > 0 {
 		return errors.New("Some alert rules still in the BusiGroup")
 	}
 

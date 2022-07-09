@@ -42,6 +42,7 @@ type AlertHisEvent struct {
 	RecoverTime      int64  `column:"recover_time" json:"recover_time"`
 	LastEvalTime     int64  `column:"last_eval_time" json:"last_eval_time"`
 	Tags             string `column:"tags" json:"-"`
+	NotifyCurNumber  int    `column:"notify_cur_number" json:"notify_cur_number"` // notify: current number
 
 	//------------------数据库字段结束,自定义字段写在下面---------------//
 	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
