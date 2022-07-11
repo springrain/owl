@@ -267,7 +267,7 @@ func RecordingRuleStatistics(cluster string) (*Statistics, error) {
 
 	ctx := getCtx()
 	//构造查询用的finder
-	finder := zorm.NewSelectFinder(RecordingRuleStructTableName, "count(*) as total", "max(update_at) as last_updated").Append(" WHERE 1=1")
+	finder := zorm.NewSelectFinder(RecordingRuleStructTableName, "count(*) as total,max(update_at) as last_updated").Append(" WHERE 1=1")
 	if cluster != "" {
 		finder.Append(" and cluster = ?", cluster)
 	}
