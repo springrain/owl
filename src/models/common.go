@@ -1,7 +1,10 @@
 package models
 
 import (
+	"strings"
+
 	"gitee.com/chunanyong/zorm"
+
 	"github.com/toolkits/pkg/str"
 
 	"context"
@@ -10,6 +13,9 @@ import (
 )
 
 const AdminRole = "Admin"
+
+// if rule's cluster field contains `ClusterAll`, means it take effect in all clusters
+const ClusterAll = "$all"
 
 func getCtx() context.Context {
 	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -24,6 +30,9 @@ func getCtx() context.Context {
 }
 
 /**
+// if rule's cluster field contains `ClusterAll`, means it take effect in all clusters
+const ClusterAll = "$all"
+
 func DB() *gorm.DB {
 	return storage.DB
 }
@@ -64,4 +73,17 @@ func CryptoPass(raw string) (string, error) {
 type Statistics struct {
 	Total       int64 `column:"total"`
 	LastUpdated int64 `column:"last_updated"`
+}
+
+func MatchCluster(ruleCluster, targetCluster string) bool {
+	if targetCluster == ClusterAll {
+		return true
+	}
+	clusters := strings.Fields(ruleCluster)
+	for _, c := range clusters {
+		if c == ClusterAll || c == targetCluster {
+			return true
+		}
+	}
+	return false
 }

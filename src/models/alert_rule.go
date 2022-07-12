@@ -147,7 +147,7 @@ func (ar *AlertRule) Add() error {
 		return err
 	}
 
-	exists, err := AlertRuleExists("group_id=? and cluster=? and name=?", ar.GroupId, ar.Cluster, ar.Name)
+	exists, err := AlertRuleExists(0, ar.GroupId, ar.Cluster, ar.Name)
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (ar *AlertRule) Add() error {
 
 func (ar *AlertRule) Update(arf AlertRule) error {
 	if ar.Name != arf.Name {
-		exists, err := AlertRuleExists("group_id=? and cluster=? and name=? and id <> ?", ar.GroupId, ar.Cluster, arf.Name, ar.Id)
+		exists, err := AlertRuleExists(ar.Id, ar.GroupId, ar.Cluster, arf.Name)
 		if err != nil {
 			return err
 		}
@@ -320,17 +320,27 @@ func AlertRuleDels(ids []int64, bgid ...int64) error {
 
 }
 
-func AlertRuleExists(where string, args ...interface{}) (bool, error) {
-	//构造查询用的finder
-	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "COUNT(*)")
-	if where != "" {
-		finder.Append("Where "+where, args...)
+func AlertRuleExists(id, groupId int64, cluster, name string) (bool, error) {
+	ctx := getCtx()
+	//session := DB().Where("id <> ? and group_id = ? and name = ?", id, groupId, name)
+	finder := zorm.NewSelectFinder(AlertRuleStructTableName).Append("WHERE id <> ? and group_id = ? and name = ?", id, groupId, name)
+	lst := make([]AlertRule, 0)
+	//err := session.Find(&lst).Error
+	err := zorm.Query(ctx, finder, &lst, nil)
+	if err != nil {
+		return false, err
+	}
+	if len(lst) == 0 {
+		return false, nil
 	}
 
-	//查询条数
-	num, err := Count(finder)
-	return num > 0, err
-	// return Exists(DB().Model(&AlertRule{}).Where(where, args...))
+	// match cluster
+	for _, r := range lst {
+		if MatchCluster(r.Cluster, cluster) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func AlertRuleGets(groupId int64) ([]AlertRule, error) {
@@ -356,20 +366,36 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 	// session := DB().Where("disabled = ? and prod = ?", 0, "")
 	finder.Append(" Where disabled = ? and prod = ?", 0, "")
 	if cluster != "" {
-		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" and cluster = ?", cluster)
+		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 
 	lst := make([]*AlertRule, 0)
+	//err := session.Find(&lst).Error
 	err := zorm.Query(ctx, finder, &lst, nil)
-	// err := session.Find(&lst).Error
-	if err == nil {
+	if err != nil {
+		return lst, err
+	}
+
+	if len(lst) == 0 {
+		return lst, nil
+	}
+
+	if cluster == "" {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
 		}
+		return lst, nil
 	}
 
-	return lst, err
+	lr := make([]*AlertRule, 0, len(lst))
+	for _, r := range lst {
+		if MatchCluster(r.Cluster, cluster) {
+			r.DB2FE()
+			lr = append(lr, r)
+		}
+	}
+
+	return lr, err
 }
 
 func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
@@ -452,8 +478,8 @@ func AlertRuleStatistics(cluster string) (*Statistics, error) {
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "count(*) as total, max(update_at) as last_updated")
 	finder.Append(" Where disabled = ? and prod = ?", 0, "")
 	if cluster != "" {
-		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" And cluster = ?", cluster)
+		//  简略的判断，当一个clustername是另一个clustername的substring的时候，会出现stats与预期不符，不影响使用
+		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 
 	stats := make([]*Statistics, 0)
