@@ -91,7 +91,7 @@ func (re *RecordingRule) Add() error {
 		return err
 	}
 
-	exists, err := RecordingRuleExists("group_id=? and cluster=? and name=?", re.GroupId, re.Cluster, re.Name)
+	exists, err := RecordingRuleExists(0, re.GroupId, re.Cluster, re.Name)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (re *RecordingRule) Add() error {
 
 func (re *RecordingRule) Update(ref RecordingRule) error {
 	if re.Name != ref.Name {
-		exists, err := RecordingRuleExists("group_id=? and cluster=? and name=? and id <> ?", re.GroupId, re.Cluster, ref.Name, re.Id)
+		exists, err := RecordingRuleExists(re.Id, re.GroupId, re.Cluster, ref.Name)
 		if err != nil {
 			return err
 		}
@@ -172,18 +172,29 @@ func RecordingRuleDels(ids []int64, groupId int64) error {
 	return err
 }
 
-func RecordingRuleExists(where string, regs ...interface{}) (bool, error) {
-
-	finder := zorm.NewSelectFinder(RecordingRuleStructTableName, "count(*)")
-	if where != "" {
-		finder.Append("Where "+where, regs...)
+func RecordingRuleExists(id, groupId int64, cluster, name string) (bool, error) {
+	ctx := getCtx()
+	//session := DB().Where("id <> ? and group_id = ? and name =? ", id, groupId, name)
+	finder := zorm.NewSelectFinder(RecordingRuleStructTableName).Append("WHERE id <> ? and group_id = ? and name =? ", id, groupId, name)
+	lst := make([]RecordingRule, 0)
+	//err := session.Find(&lst).Error
+	err := zorm.Query(ctx, finder, &lst, nil)
+	if err != nil {
+		return false, err
 	}
-	//查询条数
-	num, err := Count(finder)
-	return num > 0, err
+	if len(lst) == 0 {
+		return false, nil
+	}
 
-	//return Exists(DB().Model(&RecordingRule{}).Where(where, regs...))
+	// match cluster
+	for _, r := range lst {
+		if MatchCluster(r.Cluster, cluster) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
+
 func RecordingRuleGets(groupId int64) ([]RecordingRule, error) {
 	ctx := getCtx()
 	//构造查询用的finder
@@ -227,32 +238,43 @@ func RecordingRuleGetById(id int64) (*RecordingRule, error) {
 }
 
 func RecordingRuleGetsByCluster(cluster string) ([]*RecordingRule, error) {
-	/*
-		session := DB()
-		if cluster != "" {
-			session = session.Where("cluster = ?", cluster)
-		}
-
-		var lst []*RecordingRule
-		err := session.Find(&lst).Error
-	*/
 	ctx := getCtx()
-	//构造查询用的finder
-	finder := zorm.NewSelectFinder(RecordingRuleStructTableName).Append(" WHERE 1=1")
+	//session := DB().Where("disabled = ? and prod = ?", 0, "")
+	finder := zorm.NewSelectFinder(RecordingRuleStructTableName).Append("WHERE disabled = ? and prod = ?", 0, "")
+
 	if cluster != "" {
-		finder.Append(" and cluster = ?", cluster)
+		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 	lst := make([]*RecordingRule, 0)
 	//err := DB().Where(where, regs...).Find(&lst).Error
 	err := zorm.Query(ctx, finder, &lst, nil)
 
-	if err == nil {
+	//var lst []*RecordingRule
+	//err := session.Find(&lst).Error
+	if err != nil {
+		return lst, err
+	}
+
+	if len(lst) == 0 {
+		return lst, nil
+	}
+
+	if cluster == "" {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
 		}
+		return lst, nil
 	}
 
-	return lst, err
+	lr := make([]*RecordingRule, 0, len(lst))
+	for _, r := range lst {
+		if MatchCluster(r.Cluster, cluster) {
+			r.DB2FE()
+			lr = append(lr, r)
+		}
+	}
+
+	return lr, err
 }
 
 func RecordingRuleStatistics(cluster string) (*Statistics, error) {
@@ -269,7 +291,8 @@ func RecordingRuleStatistics(cluster string) (*Statistics, error) {
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(RecordingRuleStructTableName, "count(*) as total,max(update_at) as last_updated").Append(" WHERE 1=1")
 	if cluster != "" {
-		finder.Append(" and cluster = ?", cluster)
+		// 简略的判断，当一个clustername是另一个clustername的substring的时候，会出现stats与预期不符，不影响使用
+		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 	stats := make([]*Statistics, 0)
 	//err := DB().Where(where, regs...).Find(&lst).Error
