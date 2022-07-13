@@ -66,7 +66,7 @@ func AlertMuteGets(prods []string, bgid int64, query string) (lst []AlertMute, e
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
 			qarg := "%" + arr[i] + "%"
-			// session = session.Where("cause like ?", qarg, qarg)
+			// session = session.Where("cause like ?", qarg)
 			finder.Append(" And cause like ?", qarg)
 		}
 	}
@@ -95,6 +95,10 @@ func (m *AlertMute) Verify() error {
 
 	if m.Cluster == "" {
 		return errors.New("cluster invalid")
+	}
+
+	if IsClusterAll(m.Cluster) {
+		m.Cluster = ClusterAll
 	}
 
 	if m.Etime <= m.Btime {
@@ -168,7 +172,7 @@ func AlertMuteStatistics(cluster string) (*Statistics, error) {
 	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(create_at) as last_updated")
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" Where cluster = ?", cluster)
+		finder.Append(" Where (cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
 	}
 
 	err := zorm.Query(ctx, finder, &stats, nil)
@@ -204,7 +208,7 @@ func AlertMuteGetsByCluster(cluster string) ([]*AlertMute, error) {
 
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" Where cluster = ?", cluster)
+		finder.Append(" Where (cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
 	}
 
 	// session := DB().Model(&AlertMute{})

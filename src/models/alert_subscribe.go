@@ -94,6 +94,10 @@ func (s *AlertSubscribe) Verify() error {
 		return errors.New("cluster invalid")
 	}
 
+	if IsClusterAll(s.Cluster) {
+		s.Cluster = ClusterAll
+	}
+
 	if err := s.Parse(); err != nil {
 		return err
 	}
@@ -264,8 +268,8 @@ func AlertSubscribeStatistics(cluster string) (*Statistics, error) {
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName, "count(*) as total, max(update_at) as last_updated")
 	if cluster != "" {
-		// session = session.Where("cluster = ?", cluster)
-		finder.Append(" Where cluster = ?", cluster)
+		// session = session.Where("(cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
+		finder.Append(" Where (cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
 	}
 	stats := make([]*Statistics, 0)
 	// err := session.Find(&stats).Error
@@ -279,12 +283,13 @@ func AlertSubscribeStatistics(cluster string) (*Statistics, error) {
 
 func AlertSubscribeGetsByCluster(cluster string) ([]*AlertSubscribe, error) {
 	lst := make([]*AlertSubscribe, 0)
+	slst := make([]*AlertSubscribe, 0)
 	ctx := getCtx()
 	//构造查询用的finder
 	finder := zorm.NewSelectFinder(AlertSubscribeStructTableName) // select * from t_demo
 	if cluster != "" {
-		// session = session.Where("cluster = ?", cluster)
-		finder.Append("Where cluster = ?", cluster)
+		// session = session.Where("(cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
+		finder.Append("Where(cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
 	}
 
 	err := zorm.Query(ctx, finder, &lst, nil)
@@ -296,5 +301,13 @@ func AlertSubscribeGetsByCluster(cluster string) ([]*AlertSubscribe, error) {
 	// }
 
 	// err := session.Find(&lst).Error
-	return lst, err
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range lst {
+		if MatchCluster(s.Cluster, cluster) {
+			slst = append(slst, s)
+		}
+	}
+	return slst, err
 }

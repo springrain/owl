@@ -62,6 +62,10 @@ func (re *RecordingRule) Verify() error {
 		return errors.New("cluster is blank")
 	}
 
+	if IsClusterAll(re.Cluster) {
+		re.Cluster = ClusterAll
+	}
+
 	if !model.MetricNameRE.MatchString(re.Name) {
 		return errors.New("Name has invalid chreacters")
 	}
@@ -240,10 +244,10 @@ func RecordingRuleGetById(id int64) (*RecordingRule, error) {
 func RecordingRuleGetsByCluster(cluster string) ([]*RecordingRule, error) {
 	ctx := getCtx()
 	//session := DB().Where("disabled = ? and prod = ?", 0, "")
-	finder := zorm.NewSelectFinder(RecordingRuleStructTableName).Append("WHERE disabled = ? and prod = ?", 0, "")
+	finder := zorm.NewSelectFinder(RecordingRuleStructTableName).Append("WHERE disabled = ? ", 0)
 
 	if cluster != "" {
-		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
+		finder.Append(" and (cluster like ? or cluster = ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 	lst := make([]*RecordingRule, 0)
 	//err := DB().Where(where, regs...).Find(&lst).Error
@@ -292,7 +296,7 @@ func RecordingRuleStatistics(cluster string) (*Statistics, error) {
 	finder := zorm.NewSelectFinder(RecordingRuleStructTableName, "count(*) as total,max(update_at) as last_updated").Append(" WHERE 1=1")
 	if cluster != "" {
 		// 简略的判断，当一个clustername是另一个clustername的substring的时候，会出现stats与预期不符，不影响使用
-		finder.Append(" and (cluster like ? or cluster like ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
+		finder.Append(" and (cluster like ? or cluster = ?)", "%"+cluster+"%", "%"+ClusterAll+"%")
 	}
 	stats := make([]*Statistics, 0)
 	//err := DB().Where(where, regs...).Find(&lst).Error
