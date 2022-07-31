@@ -570,7 +570,7 @@ func (u *User) BusiGroups(limit int, query string, all ...bool) ([]BusiGroup, er
 			// err = DB().Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
 			finder = zorm.NewSelectFinder(BusiGroupStructTableName)
 			finder.Append("Where id=?", t.GroupId)
-			err := zorm.Query(ctx, finder, &lst, nil)
+			err = zorm.Query(ctx, finder, &lst, nil)
 		}
 		return lst, err
 	}
@@ -608,7 +608,7 @@ func (u *User) BusiGroups(limit int, query string, all ...bool) ([]BusiGroup, er
 			// err = DB().Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
 			finder = zorm.NewSelectFinder(BusiGroupStructTableName)
 			finder.Append("Where id=?", t.GroupId)
-			err := zorm.Query(ctx, finder, &lst, nil)
+			err = zorm.Query(ctx, finder, &lst, nil)
 		}
 	}
 
