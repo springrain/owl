@@ -118,6 +118,24 @@ func (b *Board) Del() error {
 	return err
 }
 
+func BoardGetByID(id int64) (*Board, error) {
+	var lst []*Board
+	ctx := getCtx()
+	// err := DB().Where("id = ?", id).Find(&lst).Error
+	finder := zorm.NewSelectFinder(BoardStructTableName)
+	finder.Append("Where id=?", id)
+	err := zorm.Query(ctx, finder, &lst, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(lst) == 0 {
+		return nil, nil
+	}
+
+	return lst[0], nil
+}
+
 // BoardGet for detail page
 func BoardGet(where string, args ...interface{}) (*Board, error) {
 	// var lst []*Board

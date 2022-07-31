@@ -555,6 +555,23 @@ func (u *User) BusiGroups(limit int, query string, all ...bool) ([]BusiGroup, er
 		// err := session.Where("name like ?", "%"+query+"%").Find(&lst).Error
 		finder.Append("Where name like ?", "%"+query+"%")
 		err := zorm.Query(ctx, finder, &lst, nil)
+		if err != nil {
+			return lst, err
+		}
+
+		if len(lst) == 0 && len(query) > 0 {
+			// 隐藏功能，一般人不告诉，哈哈。query可能是给的ident，所以上面的sql没有查到，当做ident来查一下试试
+			var t *Target
+			t, err = TargetGet("ident=?", query)
+			if err != nil {
+				return lst, err
+			}
+
+			// err = DB().Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
+			finder = zorm.NewSelectFinder(BusiGroupStructTableName)
+			finder.Append("Where id=?", t.GroupId)
+			err := zorm.Query(ctx, finder, &lst, nil)
+		}
 		return lst, err
 	}
 
@@ -573,11 +590,28 @@ func (u *User) BusiGroups(limit int, query string, all ...bool) ([]BusiGroup, er
 	}
 
 	// err = session.Where("id in ?", busiGroupIds).Where("name like ?", "%"+query+"%").Find(&lst).Error
-
 	finder.Append("Where id in (?)", busiGroupIds).Append(" and name like ?", "%"+query+"%")
 	finder.Append("Order by name")
 
 	err = zorm.Query(ctx, finder, &lst, page)
+	if err != nil {
+		return nil, err
+	}
+	if len(lst) == 0 && len(query) > 0 {
+		var t *Target
+		t, err = TargetGet("ident=?", query)
+		if err != nil {
+			return lst, err
+		}
+
+		if slice.ContainsInt64(busiGroupIds, t.GroupId) {
+			// err = DB().Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
+			finder = zorm.NewSelectFinder(BusiGroupStructTableName)
+			finder.Append("Where id=?", t.GroupId)
+			err := zorm.Query(ctx, finder, &lst, nil)
+		}
+	}
+
 	return lst, err
 }
 

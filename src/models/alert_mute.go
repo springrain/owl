@@ -17,10 +17,10 @@ import (
 
 type TagFilter struct {
 	Key    string              `json:"key"`   // tag key
-	Func   string              `json:"func"`  // == | =~ | in
+	Func   string              `json:"func"`  // `==` | `=~` | `in` | `!=` | `!~` | `not in`
 	Value  string              `json:"value"` // tag value
-	Regexp *regexp.Regexp      // parse value to regexp if func = '=~'
-	Vset   map[string]struct{} // parse value to regexp if func = 'in'
+	Regexp *regexp.Regexp      // parse value to regexp if func = '=~' or '!~'
+	Vset   map[string]struct{} // parse value to regexp if func = 'in' or 'not in'
 }
 
 //AlertMuteStructTableName 表名常量,方便直接调用

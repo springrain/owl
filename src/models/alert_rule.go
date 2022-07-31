@@ -403,12 +403,11 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 }
 
 func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
-	// session := DB().Where("disabled = ? and prod IN (?)", 0, prods)
-	// err := session.Find(&lst).Error
+	// session := DB().Where("prod in (?)", prods)
 	lst := make([]*AlertRule, 0)
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertRuleStructTableName) // select * from t_demo
-	finder.Append(" Where disabled = ? and prod IN (?)", 0, prods)
+	finder.Append(" Where prod IN (?)", prods)
 
 	if query != "" {
 		arr := strings.Fields(query)

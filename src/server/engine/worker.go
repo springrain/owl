@@ -15,6 +15,7 @@ import (
 	"github.com/toolkits/pkg/str"
 
 	"github.com/didi/nightingale/v5/src/models"
+	"github.com/didi/nightingale/v5/src/pkg/prom"
 	"github.com/didi/nightingale/v5/src/server/common/conv"
 	"github.com/didi/nightingale/v5/src/server/config"
 	"github.com/didi/nightingale/v5/src/server/memsto"
@@ -86,7 +87,7 @@ func (r RuleEval) Start() {
 			return
 		default:
 			r.Work()
-			logger.Debugf("rule executed，rule_id=%d", r.RuleID())
+			logger.Debugf("rule executed, rule_id=%d", r.RuleID())
 			interval := r.rule.PromEvalInterval
 			if interval <= 0 {
 				interval = 10
@@ -111,12 +112,11 @@ func (r RuleEval) Work() {
 	var value model.Value
 	var err error
 	if r.rule.Algorithm == "" {
-		var warnings reader.Warnings
-		value, warnings, err = reader.Reader.Client.Query(context.Background(), promql, time.Now())
+		var warnings prom.Warnings
+		value, warnings, err = reader.Client.Query(context.Background(), promql, time.Now())
 		if err != nil {
 			logger.Errorf("rule_eval:%d promql:%s, error:%v", r.RuleID(), promql, err)
-			// 告警查询prometheus逻辑出错，发告警信息给管理员
-			notifyToMaintainer(err, "查询prometheus出错")
+			notifyToMaintainer(err, "failed to query prometheus")
 			return
 		}
 
@@ -189,7 +189,6 @@ func (ws *WorkersType) Build(rids []int64) {
 		elst, err := models.AlertCurEventGetByRule(rules[hash].Id)
 		if err != nil {
 			logger.Errorf("worker_build: AlertCurEventGetByRule failed: %v", err)
-			notifyToMaintainer(err, "AlertCurEventGetByRule Error，ruleID="+fmt.Sprint(rules[hash].Id))
 			continue
 		}
 
@@ -325,7 +324,7 @@ func (r RuleEval) judge(vectors []conv.Vector) {
 		}
 
 		// isMuted only need TriggerTime RuleName and TagsMap
-		if isMuted(event) {
+		if IsMuted(event) {
 			logger.Infof("event_muted: rule_id=%d %s", r.rule.Id, vectors[i].Key)
 			continue
 		}
@@ -557,7 +556,7 @@ func (r RecordingRuleEval) Work() {
 		return
 	}
 
-	value, warnings, err := reader.Reader.Client.Query(context.Background(), promql, time.Now())
+	value, warnings, err := reader.Client.Query(context.Background(), promql, time.Now())
 	if err != nil {
 		logger.Errorf("recording_rule_eval:%d promql:%s, error:%v", r.RuleID(), promql, err)
 		return
