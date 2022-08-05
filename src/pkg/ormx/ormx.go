@@ -42,8 +42,9 @@ func New(c DBConfig) (*zorm.DBDao, error) {
 		MaxIdleConns: c.MaxIdleConns,
 		//ConnMaxLifetimeSecond 连接存活秒时间. 默认600(10分钟)后连接被销毁重建.避免数据库主动断开连接,造成死连接.MySQL默认wait_timeout 28800秒(8小时)
 		ConnMaxLifetimeSecond: c.MaxLifetime,
-		//PrintSQL 打印SQL.会使用FuncPrintSQL记录SQL
-		PrintSQL: c.Debug,
+	}
+	if !c.Debug {
+		dbDaoConfig.SlowSQLMillis = -1
 	}
 
 	// 根据dbDaoConfig创建dbDao, 一个数据库只执行一次,第一个执行的数据库为 defaultDao,后续zorm.xxx方法,默认使用的就是defaultDao
