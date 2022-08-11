@@ -31,6 +31,10 @@ type Target struct {
 	GroupObj *BusiGroup        `json:"group_obj"`
 	TagsJSON []string          `json:"tags"`
 	TagsMap  map[string]string `json:"-"` // internal use, append tags to series
+	TargetUp   	float64		   `json:"target_up"`
+	LoadPerCore float64 	   `json:"load_per_core"`
+	MemUtil     float64 	   `json:"mem_util"`
+	DiskUtil    float64 	   `json:"disk_util"`
 }
 
 //GetTableName 获取表名称
