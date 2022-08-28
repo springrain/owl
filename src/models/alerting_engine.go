@@ -9,6 +9,7 @@ import (
 const AlertingEngineStructTableName = "alerting_engines"
 
 type AlertingEngines struct {
+	zorm.EntityStruct
 	Id       int64  `column:"id" json:"id"`
 	Instance string `column:"instance" json:"instance"`
 	Cluster  string `column:"cluster" json:"cluster"` // reader cluster
@@ -44,8 +45,11 @@ func (e *AlertingEngines) UpdateCluster(c string) error {
 // AlertingEngineGetCluster 根据实例名获取对应的集群名字
 func AlertingEngineGetCluster(instance string) (string, error) {
 	var objs []AlertingEngines
+	ctx := getCtx()
 	// err := DB().Where("instance=?", instance).Find(&objs).Error
-
+	finder := zorm.NewSelectFinder(AlertingEngineStructTableName) // select * from t_demo
+	finder.Append("Where instance=?", instance)
+	err := zorm.Query(ctx, finder, &objs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -59,7 +63,7 @@ func AlertingEngineGetCluster(instance string) (string, error) {
 
 // AlertingEngineGets 拉取列表数据，用户要在页面上看到所有 n9e-server 实例列表，然后为其分配 cluster
 func AlertingEngineGets(where string, args ...interface{}) ([]*AlertingEngines, error) {
-	objs := make([]AlertingEngines, 0)
+	var objs []*AlertingEngines
 	var err error
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertingEngineStructTableName) // select * from t_demo
@@ -68,7 +72,7 @@ func AlertingEngineGets(where string, args ...interface{}) ([]*AlertingEngines, 
 	if where != "" {
 		finder.Append("Where "+where, args...)
 	}
-	err := zorm.Query(ctx, finder, &objs, nil)
+	err = zorm.Query(ctx, finder, &objs, nil)
 	return objs, err
 }
 
@@ -96,7 +100,7 @@ func AlertingEngineGetsInstances(where string, args ...interface{}) ([]string, e
 		finder.Append("Where "+where, args...)
 	}
 	finder.Append(" Order by instance")
-	err := zorm.Query(ctx, finder, &arr, nil)
+	err = zorm.Query(ctx, finder, &arr, nil)
 	return arr, err
 }
 

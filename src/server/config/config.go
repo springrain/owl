@@ -184,18 +184,10 @@ func MustLoad(fpaths ...string) {
 }
 
 type Config struct {
-<<<<<<< HEAD
 	RunMode           string
 	ClusterName       string
 	BusiGroupLabelKey string
-	AnomalyDataApi    []string
 	EngineDelay       int64
-=======
-	RunMode            string
-	ClusterName        string
-	BusiGroupLabelKey  string
-	EngineDelay        int64
->>>>>>> upstream/main
 	DisableUsageReport bool
 	ReaderFrom         string
 	ForceUseServerTS   bool
