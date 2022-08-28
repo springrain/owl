@@ -16,6 +16,7 @@ type AlertHisEvent struct {
 	zorm.EntityStruct
 	//Id []
 	Id               int64  `column:"id" json:"id"`
+	Cate             string `column:"cate" json:"cate"`
 	IsRecovered      int    `column:"is_recovered" json:"is_recovered"`
 	Cluster          string `column:"cluster" json:"cluster"`
 	GroupId          int64  `column:"group_id" json:"group_id"`
@@ -115,7 +116,7 @@ func (e *AlertHisEvent) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	return nil
 }
 
-func AlertHisEventTotal(prod string, bgid, stime, etime int64, severity int, recovered int, clusters []string, query string) (int64, error) {
+func AlertHisEventTotal(prod string, bgid, stime, etime int64, severity int, recovered int, clusters, cates []string, query string) (int64, error) {
 	// session := DB().Model(&AlertHisEvent{}).Where("last_eval_time between ? and ? and rule_prod = ?", stime, etime, prod)
 
 	//构造查询用的finder
@@ -139,6 +140,11 @@ func AlertHisEventTotal(prod string, bgid, stime, etime int64, severity int, rec
 		finder.Append(" And cluster in (?)", clusters)
 	}
 
+	if len(cates) > 0 {
+		// session = session.Where("cate in ?", cates)
+		finder.Append(" And cate in (?)", cates)
+	}
+
 	if query != "" {
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
@@ -151,7 +157,7 @@ func AlertHisEventTotal(prod string, bgid, stime, etime int64, severity int, rec
 	return Count(finder)
 }
 
-func AlertHisEventGets(prod string, bgid, stime, etime int64, severity int, recovered int, clusters []string, query string, limit, offset int) ([]AlertHisEvent, error) {
+func AlertHisEventGets(prod string, bgid, stime, etime int64, severity int, recovered int, clusters, cates []string, query string, limit, offset int) ([]AlertHisEvent, error) {
 
 	ctx := getCtx()
 	//构造查询用的finder
@@ -177,6 +183,11 @@ func AlertHisEventGets(prod string, bgid, stime, etime int64, severity int, reco
 	if len(clusters) > 0 {
 		// session = session.Where("cluster in ?", clusters)
 		finder.Append(" And cluster in (?)", clusters)
+	}
+
+	if len(cates) > 0 {
+		// session = session.Where("cate in ?", cates)
+		finder.Append(" And cate in (?)", cates)
 	}
 
 	if query != "" {

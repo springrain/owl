@@ -70,6 +70,10 @@ func MustLoad(fpaths ...string) {
 			C.EngineDelay = 120
 		}
 
+		if C.ReaderFrom == "" {
+			C.ReaderFrom = "config"
+		}
+
 		if C.Heartbeat.IP == "" {
 			// auto detect
 			// C.Heartbeat.IP = fmt.Sprint(GetOutboundIP())
@@ -81,7 +85,11 @@ func MustLoad(fpaths ...string) {
 				os.Exit(1)
 			}
 
-			C.Heartbeat.IP = hostname + "+" + fmt.Sprint(os.Getpid())
+			if strings.Contains(hostname, "localhost") {
+				fmt.Println("Warning! hostname contains substring localhost, setting a more unique hostname is recommended")
+			}
+
+			C.Heartbeat.IP = hostname
 
 			// if C.Heartbeat.IP == "" {
 			// 	fmt.Println("heartbeat ip auto got is blank")
@@ -90,7 +98,6 @@ func MustLoad(fpaths ...string) {
 		}
 
 		C.Heartbeat.Endpoint = fmt.Sprintf("%s:%d", C.Heartbeat.IP, C.HTTP.Port)
-		C.Alerting.RedisPub.ChannelKey = C.Alerting.RedisPub.ChannelPrefix + C.ClusterName
 
 		if C.Alerting.Webhook.Enable {
 			if C.Alerting.Webhook.Timeout == "" {
@@ -177,12 +184,21 @@ func MustLoad(fpaths ...string) {
 }
 
 type Config struct {
+<<<<<<< HEAD
 	RunMode           string
 	ClusterName       string
 	BusiGroupLabelKey string
 	AnomalyDataApi    []string
 	EngineDelay       int64
+=======
+	RunMode            string
+	ClusterName        string
+	BusiGroupLabelKey  string
+	EngineDelay        int64
+>>>>>>> upstream/main
 	DisableUsageReport bool
+	ReaderFrom         string
+	ForceUseServerTS   bool
 	Log                logx.Config
 	HTTP               httpx.Config
 	BasicAuth          gin.Accounts
@@ -194,27 +210,8 @@ type Config struct {
 	DB                 ormx.DBConfig
 	WriterOpt          WriterGlobalOpt
 	Writers            []WriterOptions
-	Reader             ReaderOptions
+	Reader             PromOption
 	Ibex               Ibex
-}
-
-type ReaderOptions struct {
-	Url           string
-	BasicAuthUser string
-	BasicAuthPass string
-
-	Timeout               int64
-	DialTimeout           int64
-	TLSHandshakeTimeout   int64
-	ExpectContinueTimeout int64
-	IdleConnTimeout       int64
-	KeepAlive             int64
-
-	MaxConnsPerHost     int
-	MaxIdleConns        int
-	MaxIdleConnsPerHost int
-
-	Headers []string
 }
 
 type WriterOptions struct {
@@ -315,7 +312,7 @@ func (c *Config) IsDebugMode() bool {
 
 // Get preferred outbound ip of this machine
 func GetOutboundIP() net.IP {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	conn, err := net.Dial("udp", "223.5.5.5:80")
 	if err != nil {
 		fmt.Println("auto get outbound ip fail:", err)
 		os.Exit(1)

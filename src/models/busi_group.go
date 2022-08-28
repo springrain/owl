@@ -170,8 +170,8 @@ func (bg *BusiGroup) Del() error {
 		return errors.New("Some targets still in the BusiGroup")
 	}
 
-	// has, err = Exists(DB().Model(&Dashboard{}).Where("group_id=?", bg.Id))
-	finder = zorm.NewSelectFinder(DashboardStructTableName, "COUNT(*)")
+	// has, err = Exists(DB().Model(&Board{}).Where("group_id=?", bg.Id))
+	finder = zorm.NewSelectFinder(BoardStructTableName, "COUNT(*)")
 	finder.Append("WHERE group_id=?", bg.Id)
 	//查询条数
 	num, err = Count(finder)

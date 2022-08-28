@@ -19,6 +19,7 @@ type AlertCurEvent struct {
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id               int64  `column:"id" json:"id"`
+	Cate             string `column:"cate" json:"cate"`
 	Cluster          string `column:"cluster" json:"cluster"`
 	GroupId          int64  `column:"group_id" json:"group_id"`
 	GroupName        string `column:"group_name" json:"group_name"`
@@ -182,6 +183,7 @@ func (e *AlertCurEvent) ToHis() *AlertHisEvent {
 
 	return &AlertHisEvent{
 		IsRecovered:      isRecovered,
+		Cate:             e.Cate,
 		Cluster:          e.Cluster,
 		GroupId:          e.GroupId,
 		GroupName:        e.GroupName,
@@ -276,7 +278,7 @@ func (e *AlertCurEvent) FillNotifyGroups(cache map[int64]*UserGroup) error {
 	return nil
 }
 
-func AlertCurEventTotal(prod string, bgid, stime, etime int64, severity int, clusters []string, query string) (int64, error) {
+func AlertCurEventTotal(prod string, bgid, stime, etime int64, severity int, clusters, cates []string, query string) (int64, error) {
 
 	// session := DB().Model(&AlertCurEvent{}).Where("trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
 	// return Count(session)
@@ -299,6 +301,11 @@ func AlertCurEventTotal(prod string, bgid, stime, etime int64, severity int, clu
 		finder.Append("And cluster in (?)", clusters)
 	}
 
+	if len(cates) > 0 {
+		// session = session.Where("cate in ?", cates)
+		finder.Append("And cate in (?)", cates)
+	}
+
 	if query != "" {
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
@@ -316,7 +323,7 @@ func AlertCurEventTotal(prod string, bgid, stime, etime int64, severity int, clu
 
 }
 
-func AlertCurEventGets(prod string, bgid, stime, etime int64, severity int, clusters []string, query string, limit, offset int) ([]AlertCurEvent, error) {
+func AlertCurEventGets(prod string, bgid, stime, etime int64, severity int, clusters, cates []string, query string, limit, offset int) ([]AlertCurEvent, error) {
 	// session := DB().Where("trigger_time between ? and ? and rule_prod = ?", stime, etime, prod)
 
 	lst := make([]AlertCurEvent, 0)
@@ -335,6 +342,11 @@ func AlertCurEventGets(prod string, bgid, stime, etime int64, severity int, clus
 
 	if len(clusters) > 0 {
 		finder.Append("And cluster in (?)", clusters)
+	}
+
+	if len(cates) > 0 {
+		// session = session.Where("cate in ?", cates)
+		finder.Append("And cate in (?)", cates)
 	}
 
 	if query != "" {

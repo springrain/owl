@@ -153,6 +153,11 @@ func buildTargetWhere(bgid int64, clusters []string, query string) *zorm.Finder 
 	return finder
 }
 
+func TargetTotalCount() (int64, error) {
+	finder := zorm.NewSelectFinder(TargetStructTableName, "count(*)")
+	return Count(finder)
+}
+
 func TargetTotal(bgid int64, clusters []string, query string) (int64, error) {
 
 	//构造查询用的finder

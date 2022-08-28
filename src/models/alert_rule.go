@@ -24,6 +24,7 @@ type AlertRule struct {
 	zorm.EntityStruct
 	Id               int64  `column:"id" json:"id"`
 	GroupId          int64  `column:"group_id" json:"group_id"` //GroupId busi group id
+	Cate     		 string `column:"cate" json:"cate"`
 	Cluster          string `column:"cluster" json:"cluster"`
 	Name             string `column:"name" json:"name"`
 	Note             string `column:"note" json:"note"`
@@ -402,7 +403,8 @@ func AlertRuleGetsByCluster(cluster string) ([]*AlertRule, error) {
 	return lr, err
 }
 
-func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
+func AlertRulesGetsBy(prods []string, query, algorithm, cluster string, cates []string, disabled int) ([]*AlertRule, error) {
+
 	// session := DB().Where("prod in (?)", prods)
 	lst := make([]*AlertRule, 0)
 	ctx := getCtx()
@@ -416,6 +418,25 @@ func AlertRulesGetsBy(prods []string, query string) ([]*AlertRule, error) {
 			// session = session.Where("append_tags like ?", qarg)
 			finder.Append(" And append_tags like ?", qarg)
 		}
+	}
+	if algorithm != "" {
+		// session = session.Where("algorithm = ?", algorithm)
+		finder.Append(" And algorithm = ?", algorithm)
+	}
+
+	if cluster != "" {
+		// session = session.Where("cluster like ?", "%"+cluster+"%")
+		finder.Append(" And cluster like ?", "%"+cluster+"%")
+	}
+
+	if len(cates) != 0 {
+		// session = session.Where("cate in (?)", cates)
+		finder.Append(" And cate IN (?)", cates)
+	}
+
+	if disabled != -1 {
+		// session = session.Where("disabled = ?", disabled)
+		finder.Append(" And disabled = ?", disabled)
 	}
 
 	err := zorm.Query(ctx, finder, &lst, nil)

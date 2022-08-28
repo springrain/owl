@@ -50,7 +50,7 @@ func BusiGroupIds(userGroupIds []int64, permFlag ...string) ([]int64, error) {
 		return []int64{}, nil
 	}
 	ctx := getCtx()
-	finder := zorm.NewSelectFinder(BusiGroupMemberStructTableName, "user_group_id")
+	finder := zorm.NewSelectFinder(BusiGroupMemberStructTableName, "busi_group_id")
 	finder.Append("Where user_group_id in (?)", userGroupIds)
 	// session := DB().Model(&BusiGroupMember{}).Where("user_group_id in ?", userGroupIds)
 	if len(permFlag) > 0 {

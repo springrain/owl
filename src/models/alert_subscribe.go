@@ -22,6 +22,7 @@ type AlertSubscribe struct {
 	zorm.EntityStruct
 	Id               int64        `column:"id" json:"id"`
 	GroupId          int64        `column:"group_id" json:"group_id"` //GroupId busi group id
+	Cate     		 string       `column:"cate" json:"cate"`
 	Cluster          string       `column:"cluster" json:"cluster"`
 	RuleId           int64        `column:"rule_id" json:"rule_id"`
 	Tags             ormx.JSONArr `column:"tags" json:"tags"`

@@ -52,7 +52,7 @@ insert into user_group_member(group_id, user_id) values(1, 1);
 CREATE TABLE `configs` (
     `id` bigint unsigned not null auto_increment,
     `ckey` varchar(191) not null,
-    `cval` varchar(1024) not null default '',
+    `cval` varchar(4096) not null default '',
     PRIMARY KEY (`id`),
     UNIQUE KEY (`ckey`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
@@ -226,6 +226,7 @@ CREATE TABLE `chart_share` (
 CREATE TABLE `alert_rule` (
     `id` bigint unsigned not null auto_increment,
     `group_id` bigint not null default 0 comment 'busi group id',
+    `cate` varchar(128) not null,
     `cluster` varchar(128) not null,
     `name` varchar(255) not null,
     `note` varchar(1024) not null default '',
@@ -264,6 +265,7 @@ CREATE TABLE `alert_mute` (
     `id` bigint unsigned not null auto_increment,
     `group_id` bigint not null default 0 comment 'busi group id',
     `prod` varchar(255) not null default '',
+    `cate` varchar(128) not null,
     `cluster` varchar(128) not null,
     `tags` varchar(4096) not null default '' comment 'json,map,tagkey->regexp|value',
     `cause` varchar(255) not null default '',
@@ -279,6 +281,7 @@ CREATE TABLE `alert_mute` (
 CREATE TABLE `alert_subscribe` (
     `id` bigint unsigned not null auto_increment,
     `group_id` bigint not null default 0 comment 'busi group id',
+    `cate` varchar(128) not null,
     `cluster` varchar(128) not null,
     `rule_id` bigint not null default 0,
     `tags` varchar(4096) not null default '' comment 'json,map,tagkey->regexp|value',
@@ -380,6 +383,7 @@ insert into alert_aggr_view(name, rule, cate) values('By RuleName', 'field:rule_
 
 CREATE TABLE `alert_cur_event` (
     `id` bigint unsigned not null comment 'use alert_his_event.id',
+    `cate` varchar(128) not null,
     `cluster` varchar(128) not null,
     `group_id` bigint unsigned not null comment 'busi group id of rule',
     `group_name` varchar(255) not null default '' comment 'busi group name',
@@ -416,6 +420,7 @@ CREATE TABLE `alert_cur_event` (
 CREATE TABLE `alert_his_event` (
     `id` bigint unsigned not null AUTO_INCREMENT,
     `is_recovered` tinyint(1) not null,
+    `cate` varchar(128) not null,
     `cluster` varchar(128) not null,
     `group_id` bigint unsigned not null comment 'busi group id of rule',
     `group_name` varchar(255) not null default '' comment 'busi group name',
@@ -499,4 +504,14 @@ CREATE TABLE `task_record`
     PRIMARY KEY (`id`),
     KEY (`create_at`, `group_id`),
     KEY (`create_by`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE `alerting_engines`
+(
+    `id` int unsigned NOT NULL AUTO_INCREMENT,
+    `instance` varchar(128) not null default '' comment 'instance identification, e.g. 10.9.0.9:9090',
+    `cluster` varchar(128) not null default '' comment 'target reader cluster',
+    `clock` bigint not null,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY (`instance`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

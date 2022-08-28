@@ -32,6 +32,7 @@ type AlertMute struct {
 	zorm.EntityStruct
 	Id       int64        `column:"id" json:"id"`
 	GroupId  int64        `column:"group_id" json:"group_id"`
+	Cate     string       `column:"cate" json:"cate"`
 	Prod     string       `column:"prod" json:"prod"` // product empty means n9e
 	Cluster  string       `column:"cluster" json:"cluster"`
 	Tags     ormx.JSONArr `column:"tags" json:"tags"`
@@ -102,7 +103,7 @@ func (m *AlertMute) Verify() error {
 	}
 
 	if m.Etime <= m.Btime {
-		return fmt.Errorf("Oops... etime(%d) <= btime(%d)", m.Etime, m.Btime)
+		return fmt.Errorf("oops... etime(%d) <= btime(%d)", m.Etime, m.Btime)
 	}
 
 	if err := m.Parse(); err != nil {
