@@ -3,7 +3,7 @@ module github.com/didi/nightingale/v5
 go 1.18
 
 require (
-	gitee.com/chunanyong/zorm v1.5.9
+	gitee.com/chunanyong/zorm v1.6.0
 	github.com/coreos/go-oidc v2.2.1+incompatible
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/pprof v1.3.0

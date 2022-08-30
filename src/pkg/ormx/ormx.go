@@ -15,7 +15,7 @@ import (
 // DBConfig ZORM DBConfig
 type DBConfig struct {
 	Debug        bool
-	DBType       string
+	Dialect      string
 	DSN          string
 	DriverName   string
 	MaxLifetime  int
@@ -32,10 +32,10 @@ func New(c DBConfig) (*zorm.DBDao, error) {
 	dbDaoConfig := zorm.DataSourceConfig{
 		//DSN 数据库的连接字符串
 		DSN: c.DSN,
-		//数据库驱动名称:mysql,postgres,oci8,sqlserver,sqlite3,dm,kingbase 和DBType对应,处理数据库有多个驱动
+		//DriverName 数据库驱动名称:mysql,postgres,oci8,sqlserver,sqlite3,go_ibm_db,clickhouse,dm,kingbase,aci,taosSql|taosRestful 和Dialect对应
 		DriverName: c.DriverName,
-		//数据库类型(方言判断依据):mysql,postgresql,oracle,mssql,sqlite,dm,kingbase 和 DriverName 对应,处理数据库有多个驱动
-		DBType: c.DBType,
+		//Dialect 数据库方言:mysql,postgresql,oracle,mssql,sqlite,db2,clickhouse,dm,kingbase,shentong,tdengine 和 DriverName 对应
+		Dialect: c.Dialect,
 		//MaxOpenConns 数据库最大连接数 默认50
 		MaxOpenConns: c.MaxOpenConns,
 		//MaxIdleConns 数据库最大空闲连接数 默认50
