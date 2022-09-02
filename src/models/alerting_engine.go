@@ -104,7 +104,7 @@ func AlertingEngineGetsInstances(where string, args ...interface{}) ([]string, e
 	return arr, err
 }
 
-func AlertingEngineHeartbeat(instance string) error {
+func AlertingEngineHeartbeat(instance, cluster string) error {
 	var total int64
 	ctx := getCtx()
 	// err := DB().Model(new(AlertingEngines)).Where("instance=?", instance).Count(&total).Error
@@ -123,7 +123,8 @@ func AlertingEngineHeartbeat(instance string) error {
 		// }).Error
 		e := &AlertingEngines{
 			Instance: instance,
-			Clock: time.Now().Unix(),
+			Cluster:  cluster,
+			Clock:    time.Now().Unix(),
 		}
 		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			_, err := zorm.Insert(ctx, e)

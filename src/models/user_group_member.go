@@ -12,6 +12,7 @@ const UserGroupMemberStructTableName = "user_group_member"
 type UserGroupMember struct {
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
+	Id      int64 `column:"id"`
 	GroupId int64 `column:"group_id"`
 	UserId  int64 `column:"user_id"`
 }
@@ -22,7 +23,7 @@ func (entity *UserGroupMember) GetTableName() string {
 
 func (entity *UserGroupMember) GetPKColumnName() string {
 	//如果没有主键
-	return ""
+	return "id"
 }
 
 func MyGroupIds(userId int64) ([]int64, error) {

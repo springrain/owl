@@ -11,6 +11,7 @@ const RoleOperationStructTableName = "role_operation"
 type RoleOperation struct {
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
+	Id        int64  `column:"id"`
 	RoleName  string `column:"role_name"`
 	Operation string `column:"operation"`
 
@@ -31,7 +32,7 @@ func (entity *RoleOperation) GetTableName() string {
 //IEntityStruct 接口的方法,实体类需要实现!!!
 func (entity *RoleOperation) GetPKColumnName() string {
 	//如果没有主键
-	return ""
+	return "id"
 }
 
 func RoleHasOperation(roles []string, operation string) (bool, error) {
