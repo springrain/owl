@@ -21,6 +21,8 @@ type AlertSubscribe struct {
 	//引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id               int64        `column:"id" json:"id"`
+	Name             string       `column:"name" json:"name"`     // AlertSubscribe name
+	Disabled         int          `column:"disabled" json:"disabled"` // 0: enabled, 1: disabled
 	GroupId          int64        `column:"group_id" json:"group_id"` //GroupId busi group id
 	Cate     		 string       `column:"cate" json:"cate"`
 	Cluster          string       `column:"cluster" json:"cluster"`
@@ -88,6 +90,10 @@ func AlertSubscribeGet(where string, args ...interface{}) (*AlertSubscribe, erro
 	}
 
 	return lst[0], nil
+}
+
+func (s *AlertSubscribe) IsDisabled() bool {
+	return s.Disabled == 1
 }
 
 func (s *AlertSubscribe) Verify() error {

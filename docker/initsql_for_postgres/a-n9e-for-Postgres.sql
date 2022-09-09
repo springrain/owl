@@ -43,9 +43,11 @@ CREATE INDEX user_group_update_at_idx ON user_group (update_at);
 insert into user_group(id, name, create_at, create_by, update_at, update_by) values(1, 'demo-root-group', date_part('epoch',current_timestamp)::int, 'root', date_part('epoch',current_timestamp)::int, 'root');
 
 CREATE TABLE user_group_member (
+    id bigserial,
     group_id bigint  not null,
     user_id bigint  not null
 ) ;
+ALTER TABLE user_group_member ADD CONSTRAINT user_group_member_pk PRIMARY KEY (id);
 CREATE INDEX user_group_member_group_id_idx ON user_group_member (group_id);
 CREATE INDEX user_group_member_user_id_idx ON user_group_member (user_id);
 
@@ -72,9 +74,11 @@ insert into role(name, note) values('Standard', 'Ordinary user role');
 insert into role(name, note) values('Guest', 'Readonly user role');
 
 CREATE TABLE role_operation(
+    id bigserial,
     role_name varchar(128) not null,
     operation varchar(191) not null
 ) ;
+ALTER TABLE role_operation ADD CONSTRAINT role_operation_pk PRIMARY KEY (id);
 CREATE INDEX role_operation_role_name_idx ON role_operation (role_name);
 CREATE INDEX role_operation_operation_idx ON role_operation (operation);
 
@@ -259,6 +263,7 @@ CREATE INDEX chart_share_create_at_idx ON chart_share (create_at);
 CREATE TABLE alert_rule (
     id bigserial NOT NULL,
     group_id int8 NOT NULL DEFAULT 0,
+    cate varchar(128) not null default '' ,
     "cluster" varchar(128) NOT NULL,
     "name" varchar(255) NOT NULL,
     note varchar(1024) NOT NULL,
@@ -314,6 +319,7 @@ COMMENT ON COLUMN alert_rule.append_tags IS 'split by space: service=n9e mod=api
 CREATE TABLE alert_mute (
     id bigserial,
     group_id bigint not null default 0 ,
+    cate varchar(128) not null default '' ,
     prod varchar(255) NOT NULL DEFAULT '' ,
     cluster varchar(128) not null,
     tags varchar(4096) not null default '' ,
@@ -333,7 +339,10 @@ COMMENT ON COLUMN alert_mute.etime IS 'end time';
 
 CREATE TABLE alert_subscribe (
     id bigserial,
+    "name" varchar(255) NOT NULL default '',
+    disabled int2 NOT NULL default 0 ,
     group_id bigint not null default 0 ,
+    cate varchar(128) not null default '' ,
     cluster varchar(128) not null,
     rule_id bigint not null default 0,
     tags jsonb not null ,
@@ -350,6 +359,7 @@ CREATE TABLE alert_subscribe (
 ALTER TABLE alert_subscribe ADD CONSTRAINT alert_subscribe_pk PRIMARY KEY (id);
 CREATE INDEX alert_subscribe_group_id_idx ON alert_subscribe (group_id);
 CREATE INDEX alert_subscribe_update_at_idx ON alert_subscribe (update_at);
+COMMENT ON COLUMN alert_subscribe.disabled IS '0:enabled 1:disabled';
 COMMENT ON COLUMN alert_subscribe.group_id IS 'busi group id';
 COMMENT ON COLUMN alert_subscribe.tags IS 'json,map,tagkey->regexp|value';
 COMMENT ON COLUMN alert_subscribe.redefine_severity IS 'is redefine severity?';
@@ -416,6 +426,7 @@ insert into alert_aggr_view(name, rule, cate) values('By RuleName', 'field:rule_
 
 CREATE TABLE alert_cur_event (
     id bigserial NOT NULL,
+    cate varchar(128) not null default '' ,
     "cluster" varchar(128) NOT NULL,
     group_id int8 NOT NULL,
     group_name varchar(255) NOT NULL DEFAULT ''::character varying,
@@ -469,6 +480,7 @@ COMMENT ON COLUMN alert_cur_event.tags IS 'merge data_tags rule_tags, split by ,
 CREATE TABLE alert_his_event (
     id bigserial NOT NULL,
     is_recovered int2 NOT NULL,
+    cate varchar(128) not null default '' ,
     "cluster" varchar(128) NOT NULL,
     group_id int8 NOT NULL,
     group_name varchar(255) NOT NULL DEFAULT ''::character varying,
