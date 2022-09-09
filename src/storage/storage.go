@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-
+	"github.com/didi/nightingale/v5/src/pkg/ormx"
 	"github.com/didi/nightingale/v5/src/pkg/tls"
 	"github.com/go-redis/redis/v9"
 	"gitee.com/chunanyong/zorm"

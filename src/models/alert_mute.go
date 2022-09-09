@@ -66,7 +66,15 @@ func AlertMuteGetById(id int64) (*AlertMute, error) {
 
 func AlertMuteGet(where string, args ...interface{}) (*AlertMute, error) {
 	var lst []*AlertMute
-	err := DB().Where(where, args...).Find(&lst).Error
+	// err := DB().Where(where, args...).Find(&lst).Error
+	ctx := getCtx()
+	//构造查询用的finder
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName) // select * from t_demo
+	if where != "" {
+		finder.Append("Where "+where, args...)
+	}
+
+	err := zorm.Query(ctx, finder, &lst, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -182,11 +190,26 @@ func (m *AlertMute) Update(arm AlertMute) error {
 	if err != nil {
 		return err
 	}
-	return DB().Model(m).Select("*").Updates(arm).Error
+	// return DB().Model(m).Select("*").Updates(arm).Error
+
+	ctx := getCtx()
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, &arm)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func (m *AlertMute) UpdateFieldsMap(fields map[string]interface{}) error {
-	return DB().Model(m).Updates(fields).Error
+	// return DB().Model(m).Updates(fields).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, m)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
 }
 
 func AlertMuteDel(ids []int64) error {
@@ -217,9 +240,7 @@ func AlertMuteStatistics(cluster string) (*Statistics, error) {
 		finder := zorm.NewDeleteFinder(AlertMuteStructTableName)
 		finder.Append("Where etime < ?", time.Now().Unix()-buf)
 		_, err := zorm.UpdateFinder(ctx, finder)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	})
 
 	if err != nil {
@@ -227,12 +248,12 @@ func AlertMuteStatistics(cluster string) (*Statistics, error) {
 	}
 
 	stats := make([]*Statistics, 0)
-	finder = zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(create_at) as last_updated")
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(create_at) as last_updated")
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
 		finder.Append(" Where (cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
 	}
-	err := zorm.Query(ctx, finder, &stats, nil)
+	err = zorm.Query(ctx, finder, &stats, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +261,7 @@ func AlertMuteStatistics(cluster string) (*Statistics, error) {
 }
 
 func AlertMuteGetsByCluster(cluster string) ([]*AlertMute, error) {
-	
+	ctx := getCtx()
 	// get my cluster's mutes
 	finder := zorm.NewSelectFinder(AlertMuteStructTableName) // select * from t_demo
 	if cluster != "" {
@@ -250,7 +271,8 @@ func AlertMuteGetsByCluster(cluster string) ([]*AlertMute, error) {
 
 	// session := DB().Model(&AlertMute{})
 
-	mlst,lst := make([]*AlertMute, 0)
+	mlst := make([]*AlertMute, 0)
+	lst := make([]*AlertMute, 0)
 	err := zorm.Query(ctx, finder, &lst, nil)
 
 	if err != nil {
