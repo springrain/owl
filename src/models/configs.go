@@ -109,7 +109,7 @@ func ConfigsSet(ckey, cval string) error {
 		// err = DB().Model(&Configs{}).Where("ckey=?", ckey).Update("cval", cval).Error
 		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			finder := zorm.NewUpdateFinder(ConfigsStructTableName)
-			finder.Append("ckey=?", ckey)
+			finder.Append("cval=?", cval).Append("WHERE ckey=?", ckey)
 			_, err := zorm.UpdateFinder(ctx, finder)
 			return nil, err
 		})
@@ -157,7 +157,7 @@ func (c *Configs) Add() error {
 	// num, err := Count(DB().Model(&Configs{}).Where("ckey=?", c.Ckey))
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(ConfigsStructTableName, "COUNT(*)")
-	finder.Append("WHERE ckey=?", c.Ckey))
+	finder.Append("WHERE ckey=?", c.Ckey)
 	//查询条数
 	num, err := Count(finder)
 	if err != nil {
@@ -168,10 +168,6 @@ func (c *Configs) Add() error {
 	}
 
 	// insert
-	c := &Configs{
-		Ckey: c.Ckey,
-		Cval: c.Cval,
-	}
 	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		_, err := zorm.Insert(ctx, c)
 		return nil, err
@@ -183,7 +179,7 @@ func (c *Configs) Update() error {
 	// num, err := Count(DB().Model(&Configs{}).Where("id<>? and ckey=?", c.Id, c.Ckey))
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(ConfigsStructTableName, "COUNT(*)")
-	finder.Append("WHERE id<>? and ckey=?", c.Id, c.Ckey))
+	finder.Append("WHERE id<>? and ckey=?", c.Id, c.Ckey)
 	//查询条数
 	num, err := Count(finder)
 	if err != nil {
