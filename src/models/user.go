@@ -566,6 +566,9 @@ func (u *User) BusiGroups(limit int, query string, all ...bool) ([]BusiGroup, er
 			if err != nil {
 				return lst, err
 			}
+			if t == nil {
+				return lst, nil
+			}
 
 			// err = DB().Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
 			finder = zorm.NewSelectFinder(BusiGroupStructTableName)

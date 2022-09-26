@@ -118,16 +118,111 @@ func ConfigsSet(ckey, cval string) error {
 	return err
 }
 
-func ConfigsGets(ckeys []string) (map[string]string, error) {
-	objs := make([]Configs, 0)
-	// err := DB().Where("ckey in ?", ckeys).Find(&objs).Error
+func ConfigGet(id int64) (*Configs, error) {
+	var objs []*Configs
+	// err := DB().Where("id=?", id).Find(&objs).Error
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(ConfigsStructTableName) // select * from t_demo
-	//创建分页对象,查询完成后,page对象可以直接给前端分页组件使用
-	finder.Append("Where ckey in (?)", ckeys)
+	finder.Append("Where id=?", id)
 	//执行查询
 	err := zorm.Query(ctx, finder, &objs, nil)
 
+	if len(objs) == 0 {
+		return nil, nil
+	}
+	return objs[0], err
+}
+
+func ConfigsGets(prefix string, limit, offset int) ([]*Configs, error) {
+	var objs []*Configs
+	ctx := getCtx()
+	page := zorm.NewPage()
+	page.PageNo = offset/limit + 1 //查询第1页,默认是1
+	page.PageSize = limit
+	finder := zorm.NewSelectFinder(ConfigsStructTableName) // select * from t_demo
+	// session := DB()
+	if prefix != "" {
+		// session = session.Where("ckey like ?", prefix+"%")
+		finder.Append("Where ckey like ?", prefix+"%")
+	}
+
+	// err := session.Order("id desc").Limit(limit).Offset(offset).Find(&objs).Error
+	finder.Append("Order by id desc")
+	//执行查询
+	err := zorm.Query(ctx, finder, &objs, page)
+	return objs, err
+}
+
+func (c *Configs) Add() error {
+	// num, err := Count(DB().Model(&Configs{}).Where("ckey=?", c.Ckey))
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(ConfigsStructTableName, "COUNT(*)")
+	finder.Append("WHERE ckey=?", c.Ckey))
+	//查询条数
+	num, err := Count(finder)
+	if err != nil {
+		return errors.WithMessage(err, "failed to count configs")
+	}
+	if num > 0 {
+		return errors.WithMessage(err, "key is exists")
+	}
+
+	// insert
+	c := &Configs{
+		Ckey: c.Ckey,
+		Cval: c.Cval,
+	}
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.Insert(ctx, c)
+		return nil, err
+	})
+	return err
+}
+
+func (c *Configs) Update() error {
+	// num, err := Count(DB().Model(&Configs{}).Where("id<>? and ckey=?", c.Id, c.Ckey))
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(ConfigsStructTableName, "COUNT(*)")
+	finder.Append("WHERE id<>? and ckey=?", c.Id, c.Ckey))
+	//查询条数
+	num, err := Count(finder)
+	if err != nil {
+		return errors.WithMessage(err, "failed to count configs")
+	}
+	if num > 0 {
+		return errors.WithMessage(err, "key is exists")
+	}
+
+	// err = DB().Model(&Configs{}).Where("id=?", c.Id).Updates(c).Error
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		_, err := zorm.UpdateNotZeroValue(ctx, c)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
+}
+
+func ConfigsDel(ids []int64) error {
+	// return DB().Where("id in ?", ids).Delete(&Configs{}).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(ConfigsStructTableName)
+		finder.Append("Where id in (?)", ids)
+		_, err := zorm.UpdateFinder(ctx, finder)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
+}
+
+func ConfigsGetsByKey(ckeys []string) (map[string]string, error) {
+	var objs []Configs
+	// err := DB().Where("ckey in ?", ckeys).Find(&objs).Error
+	ctx := getCtx()
+	finder := zorm.NewSelectFinder(ConfigsStructTableName) // select * from t_demo
+	finder.Append("Where ckey in ?", ckeys)
+	//执行查询
+	err := zorm.Query(ctx, finder, &objs, nil)
 	if err != nil {
 		return nil, errors.WithMessage(err, "failed to gets configs")
 	}

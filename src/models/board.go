@@ -25,7 +25,7 @@ type Board struct {
 	CreateBy string `column:"create_by" json:"create_by"`
 	UpdateAt int64  `column:"update_at" json:"update_at"`
 	UpdateBy string `column:"update_by" json:"update_by"`
-
+	Public   int    `column:"public" json:"public"` // 0: false, 1: true
 	//------------------数据库字段结束,自定义字段写在下面---------------//
 	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
 	Configs  string `json:"configs"`
