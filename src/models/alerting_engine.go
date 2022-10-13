@@ -132,10 +132,11 @@ func AlertingEngineHeartbeat(instance, cluster string) error {
 		})
 	} else {
 		// update
-		// err = DB().Model(new(AlertingEngines)).Where("instance=?", instance).Update("clock", time.Now().Unix()).Error
+		// fields := map[string]interface{}{"clock": time.Now().Unix(), "cluster": cluster}
+		// err = DB().Model(new(AlertingEngines)).Where("instance=?", instance).Updates(fields).Error
 		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			finder = zorm.NewUpdateFinder(AlertingEngineStructTableName) // UPDATE t_demo SET
-			finder.Append("clock=?", time.Now().Unix()).Append("WHERE instance=?", instance)
+			finder.Append("clock=?, cluster=?", time.Now().Unix(), cluster).Append("WHERE instance=?", instance)
 			_, err := zorm.UpdateFinder(ctx, finder)
 			//如果返回的err不是nil,事务就会回滚
 			return nil, err

@@ -123,7 +123,7 @@ func (u *User) Update(selectField interface{}, selectFields ...interface{}) erro
 		return nil, err
 	})
 	return err
-	// return DB().Model(u).Select(selectField, selectFields).Updates(u).Error
+	// return DB().Model(u).Select(selectField, selectFields...).Updates(u).Error
 }
 
 func (u *User) UpdateAllFields() error {
