@@ -28,6 +28,7 @@ type Board struct {
 	Public   int    `column:"public" json:"public"` // 0: false, 1: true
 	//------------------数据库字段结束,自定义字段写在下面---------------//
 	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
+	Ident    string `json:"ident"`
 	Configs  string `json:"configs"`
 }
 
@@ -59,9 +60,42 @@ func (b *Board) Verify() error {
 	return nil
 }
 
+func (b *Board) CanRenameIdent(ident string) (bool, error) {
+	if ident == "" {
+		return true, nil
+	}
+
+	// cnt, err := Count(DB().Model(b).Where("ident=? and id <> ?", b.Ident, b.Id))
+	finder := zorm.NewSelectFinder(BoardStructTableName, "count(*)")
+	finder.Append("Where ident=? and id <> ?", b.Ident, b.Id))
+	
+	cnt, err := Count(finder)
+
+	if err != nil {
+		return false, err
+	}
+
+	return cnt == 0, nil
+}
+
 func (b *Board) Add() error {
 	if err := b.Verify(); err != nil {
 		return err
+	}
+
+	if b.Ident != "" {
+		// ident duplicate check
+		// cnt, err := Count(DB().Model(b).Where("ident=?", b.Ident))
+		finder := zorm.NewSelectFinder(BoardStructTableName, "count(*)")
+		finder.Append("Where ident=?", b.Ident))
+		cnt, err := Count(finder)
+		if err != nil {
+			return err
+		}
+
+		if cnt > 0 {
+			return errors.New("Ident duplicate")
+		}
 	}
 
 	now := time.Now().Unix()
