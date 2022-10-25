@@ -67,7 +67,7 @@ func (b *Board) CanRenameIdent(ident string) (bool, error) {
 
 	// cnt, err := Count(DB().Model(b).Where("ident=? and id <> ?", b.Ident, b.Id))
 	finder := zorm.NewSelectFinder(BoardStructTableName, "count(*)")
-	finder.Append("Where ident=? and id <> ?", b.Ident, b.Id))
+	finder.Append("Where ident=? and id <> ?", b.Ident, b.Id)
 	
 	cnt, err := Count(finder)
 
@@ -87,7 +87,7 @@ func (b *Board) Add() error {
 		// ident duplicate check
 		// cnt, err := Count(DB().Model(b).Where("ident=?", b.Ident))
 		finder := zorm.NewSelectFinder(BoardStructTableName, "count(*)")
-		finder.Append("Where ident=?", b.Ident))
+		finder.Append("Where ident=?", b.Ident)
 		cnt, err := Count(finder)
 		if err != nil {
 			return err
