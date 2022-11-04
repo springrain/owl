@@ -65,12 +65,11 @@ func (b *Board) CanRenameIdent(ident string) (bool, error) {
 		return true, nil
 	}
 
+
 	// cnt, err := Count(DB().Model(b).Where("ident=? and id <> ?", b.Ident, b.Id))
 	finder := zorm.NewSelectFinder(BoardStructTableName, "count(*)")
-	finder.Append("Where ident=? and id <> ?", b.Ident, b.Id)
-	
+	finder.Append("Where ident=? and id <> ?", ident, b.Id)
 	cnt, err := Count(finder)
-
 	if err != nil {
 		return false, err
 	}

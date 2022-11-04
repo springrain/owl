@@ -248,7 +248,7 @@ func AlertMuteStatistics(cluster string) (*Statistics, error) {
 	}
 
 	stats := make([]*Statistics, 0)
-	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(create_at) as last_updated")
+	finder := zorm.NewSelectFinder(AlertMuteStructTableName, "count(*) as total, max(update_at) as last_updated")
 	if cluster != "" {
 		// session = session.Where("cluster = ?", cluster)
 		finder.Append(" Where (cluster like ? or cluster = ?)", "%"+cluster+"%", ClusterAll)
