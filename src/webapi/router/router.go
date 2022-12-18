@@ -301,6 +301,8 @@ func configRoute(r *gin.Engine, version string) {
 
 		pages.GET("/servers", auth(), admin(), serversGet)
 		pages.PUT("/server/:id", auth(), admin(), serverBindCluster)
+		pages.POST("/servers", auth(), admin(), serverAddCluster)
+		pages.DELETE("/servers", auth(), admin(), serverDelCluster)
 	}
 
 	service := r.Group("/v1/n9e")
@@ -310,6 +312,7 @@ func configRoute(r *gin.Engine, version string) {
 	{
 		service.Any("/prometheus/*url", prometheusProxy)
 		service.POST("/users", userAddPost)
+		service.GET("/users", userFindAll)
 
 		service.GET("/targets", targetGets)
 		service.GET("/targets/tags", targetGetTags)

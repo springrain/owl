@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 	"gitee.com/chunanyong/zorm"
+	"fmt"
 ) 
 
 const AlertingEngineStructTableName = "alerting_engines"
@@ -31,10 +32,22 @@ func (e *AlertingEngines) GetPKColumnName() string {
 }
 // UpdateCluster 页面上用户会给各个n9e-server分配要关联的目标集群是什么
 func (e *AlertingEngines) UpdateCluster(c string) error {
-	e.Cluster = c
 	ctx := getCtx()
+	// count, err := Count(DB().Model(&AlertingEngines{}).Where("id<>? and instance=? and cluster=?", e.Id, e.Instance, c))
+	finder := zorm.NewSelectFinder(AlertingEngineStructTableName, "count(*)")
+	finder.Append("Where id<>? and instance=? and cluster=?", e.Id, e.Instance, c)
+	count, err := Count(finder)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return fmt.Errorf("instance %s and cluster %s already exists", e.Instance, c)
+	}
+
+	e.Cluster = c
 	// return DB().Model(e).Select("cluster").Updates(e).Error
-	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+	_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 		_, err := zorm.UpdateNotZeroValue(ctx, e)
 		//如果返回的err不是nil,事务就会回滚
 		return nil, err
@@ -42,8 +55,46 @@ func (e *AlertingEngines) UpdateCluster(c string) error {
 	return err
 }
 
+func AlertingEngineAdd(instance, cluster string) error {
+	// count, err := Count(DB().Model(&AlertingEngines{}).Where("instance=? and cluster=?", instance, cluster))
+	finder := zorm.NewSelectFinder(AlertingEngineStructTableName, "count(*)")
+	finder.Append("Where instance=? and cluster=?", instance, cluster)
+	count, err := Count(finder)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return fmt.Errorf("instance %s and cluster %s already exists", instance, cluster)
+	}
+
+	err = Insert(&AlertingEngines{
+		Instance: instance,
+		Cluster:  cluster,
+		Clock:    time.Now().Unix(),
+	}).Error
+	
+	return err
+}
+
+func AlertingEngineDel(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	// return DB().Where("id in ?", ids).Delete(new(AlertingEngines)).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(AlertingEngineStructTableName)
+		finder.Append("Where id in (?)", ids)
+		_, err := zorm.UpdateFinder(ctx, finder)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
+	return err
+}
+
 // AlertingEngineGetCluster 根据实例名获取对应的集群名字
-func AlertingEngineGetCluster(instance string) (string, error) {
+func AlertingEngineGetClusters(instance string) ([]string, error) {
 	var objs []AlertingEngines
 	ctx := getCtx()
 	// err := DB().Where("instance=?", instance).Find(&objs).Error
@@ -51,14 +102,18 @@ func AlertingEngineGetCluster(instance string) (string, error) {
 	finder.Append("Where instance=?", instance)
 	err := zorm.Query(ctx, finder, &objs, nil)
 	if err != nil {
-		return "", err
+		return []string{}, err
 	}
 
 	if len(objs) == 0 {
-		return "", nil
+		return []string{}, nil
+	}
+	var clusters []string
+	for i := 0; i < len(objs); i++ {
+		clusters = append(clusters, objs[i].Cluster)
 	}
 
-	return objs[0].Cluster, nil
+	return clusters, nil
 }
 
 // AlertingEngineGets 拉取列表数据，用户要在页面上看到所有 n9e-server 实例列表，然后为其分配 cluster
@@ -104,12 +159,11 @@ func AlertingEngineGetsInstances(where string, args ...interface{}) ([]string, e
 	return arr, err
 }
 
-func AlertingEngineHeartbeat(instance, cluster string) error {
+func AlertingEngineHeartbeatWithCluster(instance, cluster string) error {
 	var total int64
 	ctx := getCtx()
-	// err := DB().Model(new(AlertingEngines)).Where("instance=?", instance).Count(&total).Error
 	finder := zorm.NewSelectFinder(AlertingEngineStructTableName, "count(*)")
-	finder.Append("Where instance=?", instance)
+	finder.Append("Where instance=? and cluster=?", instance, cluster)
 	total, err := Count(finder)
 	if err != nil {
 		return err
@@ -133,15 +187,28 @@ func AlertingEngineHeartbeat(instance, cluster string) error {
 	} else {
 		// update
 		// fields := map[string]interface{}{"clock": time.Now().Unix(), "cluster": cluster}
-		// err = DB().Model(new(AlertingEngines)).Where("instance=?", instance).Updates(fields).Error
 		_, err = zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
 			finder = zorm.NewUpdateFinder(AlertingEngineStructTableName) // UPDATE t_demo SET
-			finder.Append("clock=?, cluster=?", time.Now().Unix(), cluster).Append("WHERE instance=?", instance)
+			finder.Append("clock=?", time.Now().Unix()).Append("WHERE instance=? and cluster=?", instance, cluster)
 			_, err := zorm.UpdateFinder(ctx, finder)
 			//如果返回的err不是nil,事务就会回滚
 			return nil, err
 		})
 	}
 
+	return err
+}
+
+func AlertingEngineHeartbeat(instance string) error {
+	// fields := map[string]interface{}{"clock": time.Now().Unix()}
+	// err := DB().Model(new(AlertingEngines)).Where("instance=?", instance).Updates(fields).Error
+	ctx := getCtx()
+	_, err := zorm.Transaction(ctx, func(ctx context.Context) (interface{}, error) {
+		finder := zorm.NewUpdateFinder(AlertingEngineStructTableName) // UPDATE t_demo SET
+		finder.Append("clock=?", time.Now().Unix()).Append("WHERE instance=?", instance)
+		_, err := zorm.UpdateFinder(ctx, finder)
+		//如果返回的err不是nil,事务就会回滚
+		return nil, err
+	})
 	return err
 }

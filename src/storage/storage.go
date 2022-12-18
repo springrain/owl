@@ -30,8 +30,10 @@ type RedisConfig struct {
 	DB       int
 	UseTLS   bool
 	tls.ClientConfig
-	RedisType  string
-	MasterName string
+	RedisType        string
+	MasterName       string
+	SentinelUsername string
+	SentinelPassword string
 }
 
 var Redis interface {
@@ -87,11 +89,13 @@ func InitRedis(cfg RedisConfig) (func(), error) {
 
 	case "sentinel":
 		redisOptions := &redis.FailoverOptions{
-			MasterName:    cfg.MasterName,
-			SentinelAddrs: strings.Split(cfg.Address, ","),
-			Username:      cfg.Username,
-			Password:      cfg.Password,
-			DB:            cfg.DB,
+			MasterName:       cfg.MasterName,
+			SentinelAddrs:    strings.Split(cfg.Address, ","),
+			Username:         cfg.Username,
+			Password:         cfg.Password,
+			DB:               cfg.DB,
+			SentinelUsername: cfg.SentinelUsername,
+			SentinelPassword: cfg.SentinelPassword,
 		}
 
 		if cfg.UseTLS {

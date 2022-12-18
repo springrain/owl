@@ -523,12 +523,11 @@ func AlertCurEventGetByIds(ids []int64) ([]*AlertCurEvent, error) {
 	return lst, err
 }
 
-func AlertCurEventGetByRule(ruleId int64) ([]*AlertCurEvent, error) {
+func AlertCurEventGetByRuleIdAndCluster(ruleId int64, cluster string) ([]*AlertCurEvent, error) {
 	lst := make([]*AlertCurEvent, 0)
-	// err := DB().Where("rule_id=?", ruleId).Find(&lst).Error
 	ctx := getCtx()
 	finder := zorm.NewSelectFinder(AlertCurEventStructTableName)
-	finder.Append("Where rule_id=?", ruleId)
+	finder.Append("Where rule_id=? and cluster=?", ruleId, cluster)
 	err := zorm.Query(ctx, finder, &lst, nil)
 	return lst, err
 }

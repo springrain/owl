@@ -64,12 +64,19 @@ func DealConfigCrypto(key string) {
 	}
 	C.Ibex.BasicAuthPass = decryptIbexPwd
 
-	decryptReaderPwd, err := secu.DealWithDecrypt(C.Reader.BasicAuthPass, key)
-	if err != nil {
-		fmt.Println("failed to decrypt the reader password", err)
-		os.Exit(1)
+	if len(C.Readers) == 0 {
+		C.Reader.ClusterName = C.ClusterName
+		C.Readers = append(C.Readers, C.Reader)
 	}
-	C.Reader.BasicAuthPass = decryptReaderPwd
+
+	for index, v := range C.Readers {
+		decryptReaderPwd, err := secu.DealWithDecrypt(v.BasicAuthPass, key)
+		if err != nil {
+			fmt.Printf("failed to decrypt the reader password: %s , error: %s", v.BasicAuthPass, err.Error())
+			os.Exit(1)
+		}
+		C.Readers[index].BasicAuthPass = decryptReaderPwd
+	}
 
 	for index, v := range C.Writers {
 		decryptWriterPwd, err := secu.DealWithDecrypt(v.BasicAuthPass, key)
@@ -217,7 +224,11 @@ func MustLoad(key string, fpaths ...string) {
 			C.WriterOpt.ShardingKey = "ident"
 		}
 
-		for _, write := range C.Writers {
+		for i, write := range C.Writers {
+			if C.Writers[i].ClusterName == "" {
+				C.Writers[i].ClusterName = C.ClusterName
+			}
+
 			for _, relabel := range write.WriteRelabels {
 				regex, ok := relabel.Regex.(string)
 				if !ok {
@@ -250,12 +261,20 @@ func MustLoad(key string, fpaths ...string) {
 }
 
 type Config struct {
+<<<<<<< HEAD
 	RunMode           string
 	ClusterName       string
 	BusiGroupLabelKey string
 	EngineDelay       int64
+=======
+	RunMode            string
+	ClusterName        string // 监控对象上报时，指定的集群名称
+	BusiGroupLabelKey  string
+	EngineDelay        int64
+>>>>>>> upstream/main
 	DisableUsageReport bool
 	ReaderFrom         string
+	LabelRewrite	   bool
 	ForceUseServerTS   bool
 	Log                logx.Config
 	HTTP               httpx.Config
@@ -269,10 +288,12 @@ type Config struct {
 	WriterOpt          WriterGlobalOpt
 	Writers            []WriterOptions
 	Reader             PromOption
+	Readers            []PromOption
 	Ibex               Ibex
 }
 
 type WriterOptions struct {
+	ClusterName   string
 	Url           string
 	BasicAuthUser string
 	BasicAuthPass string
