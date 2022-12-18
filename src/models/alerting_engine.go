@@ -72,8 +72,8 @@ func AlertingEngineAdd(instance, cluster string) error {
 		Instance: instance,
 		Cluster:  cluster,
 		Clock:    time.Now().Unix(),
-	}).Error
-	
+	})
+
 	return err
 }
 

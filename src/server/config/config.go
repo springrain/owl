@@ -261,17 +261,10 @@ func MustLoad(key string, fpaths ...string) {
 }
 
 type Config struct {
-<<<<<<< HEAD
-	RunMode           string
-	ClusterName       string
-	BusiGroupLabelKey string
-	EngineDelay       int64
-=======
 	RunMode            string
 	ClusterName        string // 监控对象上报时，指定的集群名称
 	BusiGroupLabelKey  string
 	EngineDelay        int64
->>>>>>> upstream/main
 	DisableUsageReport bool
 	ReaderFrom         string
 	LabelRewrite	   bool
