@@ -1,8 +1,9 @@
 package engine
 
 import (
-	"github.com/didi/nightingale/v5/src/models"
 	"github.com/toolkits/pkg/logger"
+
+	"github.com/didi/nightingale/v5/src/models"
 )
 
 func LogEvent(event *models.AlertCurEvent, location string, err ...error) {
@@ -17,11 +18,12 @@ func LogEvent(event *models.AlertCurEvent, location string, err ...error) {
 	}
 
 	logger.Infof(
-		"event(%s %s) %s: rule_id=%d %v%s@%d %s",
+		"event(%s %s) %s: rule_id=%d cluster:%s %v%s@%d %s",
 		event.Hash,
 		status,
 		location,
 		event.RuleId,
+		event.Cluster,
 		event.TagsJSON,
 		event.TriggerValue,
 		event.TriggerTime,

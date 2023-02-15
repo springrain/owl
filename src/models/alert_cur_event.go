@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"strconv"
 	"strings"
+	"text/template"
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/didi/nightingale/v5/src/pkg/tplx"
@@ -104,7 +104,7 @@ func (e *AlertCurEvent) ParseRule(field string) error {
 	}
 
 	text := strings.Join(append(defs, f), "")
-	t, err := template.New(fmt.Sprint(e.RuleId)).Funcs(tplx.TemplateFuncMap).Parse(text)
+	t, err := template.New(fmt.Sprint(e.RuleId)).Funcs(template.FuncMap(tplx.TemplateFuncMap)).Parse(text)
 	if err != nil {
 		return err
 	}

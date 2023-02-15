@@ -73,7 +73,7 @@ func loadFromDatabase() {
 		}
 
 		if cval == "" {
-			logger.Warningf("ckey: %s is empty", ckey)
+			logger.Debugf("ckey: %s is empty", ckey)
 			continue
 		}
 
@@ -92,7 +92,7 @@ func loadFromDatabase() {
 			}
 
 			logger.Info("setClientFromPromOption success: ", cluster)
-			PromOptions.Sets(cluster, po)
+			PromOptions.Set(cluster, po)
 			continue
 		}
 
@@ -103,7 +103,7 @@ func loadFromDatabase() {
 				continue
 			}
 
-			PromOptions.Sets(cluster, po)
+			PromOptions.Set(cluster, po)
 		}
 	}
 
@@ -119,17 +119,27 @@ func loadFromDatabase() {
 }
 
 func newClientFromPromOption(po PromOption) (api.Client, error) {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout: time.Duration(po.DialTimeout) * time.Millisecond,
+		}).DialContext,
+		ResponseHeaderTimeout: time.Duration(po.Timeout) * time.Millisecond,
+		MaxIdleConnsPerHost:   po.MaxIdleConnsPerHost,
+	}
+
+	if po.UseTLS {
+		tlsConfig, err := po.TLSConfig()
+		if err != nil {
+			logger.Errorf("new cluster %s fail: %v", po.Url, err)
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
+	}
+
 	return api.NewClient(api.Config{
-		Address: po.Url,
-		RoundTripper: &http.Transport{
-			// TLSClientConfig: tlsConfig,
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout: time.Duration(po.DialTimeout) * time.Millisecond,
-			}).DialContext,
-			ResponseHeaderTimeout: time.Duration(po.Timeout) * time.Millisecond,
-			MaxIdleConnsPerHost:   po.MaxIdleConnsPerHost,
-		},
+		Address:      po.Url,
+		RoundTripper: transport,
 	})
 }
 
@@ -142,11 +152,17 @@ func setClientFromPromOption(clusterName string, po PromOption) error {
 		return fmt.Errorf("prometheus url is blank")
 	}
 
+	if strings.HasPrefix(po.Url, "https") {
+		po.UseTLS = true
+		po.InsecureSkipVerify = true
+	}
+
 	cli, err := newClientFromPromOption(po)
 	if err != nil {
 		return fmt.Errorf("failed to newClientFromPromOption: %v", err)
 	}
 
+	logger.Debugf("setClientFromPromOption: %s, %+v", clusterName, po)
 	ReaderClients.Set(clusterName, prom.NewAPI(cli, prom.ClientOptions{
 		BasicAuthUser: po.BasicAuthUser,
 		BasicAuthPass: po.BasicAuthPass,

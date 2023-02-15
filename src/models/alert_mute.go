@@ -174,7 +174,9 @@ func (m *AlertMute) Add() error {
 	if err := m.Verify(); err != nil {
 		return err
 	}
-	m.CreateAt = time.Now().Unix()
+	now := time.Now().Unix()
+	m.CreateAt = now
+	m.UpdateAt = now
 	return Insert(m)
 }
 
@@ -278,6 +280,11 @@ func AlertMuteGetsByCluster(cluster string) ([]*AlertMute, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if cluster == "" {
+		return lst, nil
+	}
+
 	for _, m := range lst {
 		if MatchCluster(m.Cluster, cluster) {
 			mlst = append(mlst, m)

@@ -37,8 +37,8 @@ type AlertRule struct {
 	PromForDuration  int    `column:"prom_for_duration" json:"prom_for_duration"`   //PromForDuration prometheus for, unit:s
 	PromQl           string `column:"prom_ql" json:"prom_ql"`                       //PromQl promql
 	PromEvalInterval int    `column:"prom_eval_interval" json:"prom_eval_interval"` //PromEvalInterval evaluate interval
-	EnableStime      string `column:"enable_stime" json:"enable_stime"`             //EnableStime []
-	EnableEtime      string `column:"enable_etime" json:"enable_etime"`             //EnableEtime []
+	EnableStime      string `column:"enable_stime" json:"-"`             //EnableStime []
+	EnableEtime      string `column:"enable_etime" json:"-"`             //EnableEtime []
 	EnableDaysOfWeek string `column:"enable_days_of_week" json:"-"`                 //EnableDaysOfWeek split by space: 0 1 2 3 4 5 6
 	NotifyRecovered  int    `column:"notify_recovered" json:"notify_recovered"`     //NotifyRecovered whether notify when recovery
 	NotifyChannels   string `column:"notify_channels" json:"-"`                     //NotifyChannels split by space: sms voice email dingtalk wecom
@@ -55,15 +55,20 @@ type AlertRule struct {
 
 	//------------------数据库字段结束,自定义字段写在下面---------------//
 	//如果查询的字段在column tag中没有找到,就会根据名称(不区分大小写,支持 _ 转驼峰)映射到struct的属性上
-	EnableDaysOfWeekJSON []string    `json:"enable_days_of_week"` // for fe
-	EnableInBG           int         `json:"enable_in_bg"`        // 0: global 1: enable one busi-group
-	NotifyChannelsJSON   []string    `json:"notify_channels"`     // for fe
-	NotifyGroupsObj      []UserGroup `json:"notify_groups_obj"`   // for fe
-	NotifyGroupsJSON     []string    `json:"notify_groups"`       // for fe
-	RecoverDuration      int64       `json:"recover_duration"`    // unit: s
-	CallbacksJSON        []string    `json:"callbacks"`           // for fe
-	AppendTagsJSON       []string    `json:"append_tags"`         // for fe
-	AlgoParamsJson       interface{} `json:"algo_params"`         //
+	EnableDaysOfWeekJSON  []string    `json:"enable_days_of_week"`  // for fe
+	EnableDaysOfWeeksJSON [][]string  `json:"enable_days_of_weeks"` // for fe
+	EnableInBG            int         `json:"enable_in_bg"`         // 0: global 1: enable one busi-group
+	NotifyChannelsJSON    []string    `json:"notify_channels"`      // for fe
+	NotifyGroupsObj       []UserGroup `json:"notify_groups_obj"`    // for fe
+	NotifyGroupsJSON      []string    `json:"notify_groups"`        // for fe
+	RecoverDuration       int64       `json:"recover_duration"`     // unit: s
+	CallbacksJSON         []string    `json:"callbacks"`            // for fe
+	AppendTagsJSON        []string    `json:"append_tags"`          // for fe
+	AlgoParamsJson        interface{} `json:"algo_params"`          //
+	EnableStimeJSON       string      `json:"enable_stime"`         // for fe
+	EnableStimesJSON      []string    `json:"enable_stimes"`        // for fe
+	EnableEtimeJSON       string      `json:"enable_etime"`         // for fe
+	EnableEtimesJSON      []string    `json:"enable_etimes"`        // for fe
 }
 
 //GetTableName 获取表名称
@@ -270,7 +275,30 @@ func (ar *AlertRule) FillNotifyGroups(cache map[int64]*UserGroup) error {
 }
 
 func (ar *AlertRule) FE2DB() error {
-	ar.EnableDaysOfWeek = strings.Join(ar.EnableDaysOfWeekJSON, " ")
+	if len(ar.EnableStimesJSON) > 0 {
+		ar.EnableStime = strings.Join(ar.EnableStimesJSON, " ")
+		ar.EnableEtime = strings.Join(ar.EnableEtimesJSON, " ")
+	} else {
+		ar.EnableStime = ar.EnableStimeJSON
+		ar.EnableEtime = ar.EnableEtimeJSON
+	}
+
+	if len(ar.EnableDaysOfWeeksJSON) > 0 {
+		for i := 0; i < len(ar.EnableDaysOfWeeksJSON); i++ {
+			if len(ar.EnableDaysOfWeeksJSON) == 1 {
+				ar.EnableDaysOfWeek = strings.Join(ar.EnableDaysOfWeeksJSON[i], " ")
+			} else {
+				if i == len(ar.EnableDaysOfWeeksJSON)-1 {
+					ar.EnableDaysOfWeek += strings.Join(ar.EnableDaysOfWeeksJSON[i], " ")
+				} else {
+					ar.EnableDaysOfWeek += strings.Join(ar.EnableDaysOfWeeksJSON[i], " ") + ";"
+				}
+			}
+		}
+	} else {
+		ar.EnableDaysOfWeek = strings.Join(ar.EnableDaysOfWeekJSON, " ")
+	}
+
 	ar.NotifyChannels = strings.Join(ar.NotifyChannelsJSON, " ")
 	ar.NotifyGroups = strings.Join(ar.NotifyGroupsJSON, " ")
 	ar.Callbacks = strings.Join(ar.CallbacksJSON, " ")
@@ -285,7 +313,21 @@ func (ar *AlertRule) FE2DB() error {
 }
 
 func (ar *AlertRule) DB2FE() {
-	ar.EnableDaysOfWeekJSON = strings.Fields(ar.EnableDaysOfWeek)
+	ar.EnableStimesJSON = strings.Fields(ar.EnableStime)
+	ar.EnableEtimesJSON = strings.Fields(ar.EnableEtime)
+	if len(ar.EnableEtimesJSON) > 0 {
+		ar.EnableStimeJSON = ar.EnableStimesJSON[0]
+		ar.EnableEtimeJSON = ar.EnableEtimesJSON[0]
+	}
+
+	cache := strings.Split(ar.EnableDaysOfWeek, ";")
+	for i := 0; i < len(cache); i++ {
+		ar.EnableDaysOfWeeksJSON = append(ar.EnableDaysOfWeeksJSON, strings.Fields(cache[i]))
+	}
+	if len(ar.EnableDaysOfWeeksJSON) > 0 {
+		ar.EnableDaysOfWeekJSON = ar.EnableDaysOfWeeksJSON[0]
+	}
+
 	ar.NotifyChannelsJSON = strings.Fields(ar.NotifyChannels)
 	ar.NotifyGroupsJSON = strings.Fields(ar.NotifyGroups)
 	ar.CallbacksJSON = strings.Fields(ar.Callbacks)
@@ -515,4 +557,39 @@ func AlertRuleStatistics(cluster string) (*Statistics, error) {
 	}
 
 	return stats[0], nil
+}
+
+func (ar *AlertRule) IsPrometheusRule() bool {
+	return ar.Algorithm == "" && (ar.Cate == "" || strings.ToLower(ar.Cate) == "prometheus")
+}
+
+func (ar *AlertRule) GenerateNewEvent() *AlertCurEvent {
+	event := &AlertCurEvent{}
+	ar.UpdateEvent(event)
+	return event
+}
+
+func (ar *AlertRule) UpdateEvent(event *AlertCurEvent) {
+	if event == nil {
+		return
+	}
+	event.GroupId = ar.GroupId
+	event.Cate = ar.Cate
+	event.RuleId = ar.Id
+	event.RuleName = ar.Name
+	event.RuleNote = ar.Note
+	event.RuleProd = ar.Prod
+	event.RuleAlgo = ar.Algorithm
+	event.Severity = ar.Severity
+	event.PromForDuration = ar.PromForDuration
+	event.PromQl = ar.PromQl
+	event.PromEvalInterval = ar.PromEvalInterval
+	event.Callbacks = ar.Callbacks
+	event.CallbacksJSON = ar.CallbacksJSON
+	event.RunbookUrl = ar.RunbookUrl
+	event.NotifyRecovered = ar.NotifyRecovered
+	event.NotifyChannels = ar.NotifyChannels
+	event.NotifyChannelsJSON = ar.NotifyChannelsJSON
+	event.NotifyGroups = ar.NotifyGroups
+	event.NotifyGroupsJSON = ar.NotifyGroupsJSON
 }

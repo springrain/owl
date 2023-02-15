@@ -8,6 +8,8 @@ import (
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
+	"github.com/toolkits/pkg/logger"
 	"github.com/toolkits/pkg/slice"
 	"github.com/toolkits/pkg/str"
 
@@ -16,6 +18,21 @@ import (
 	"github.com/didi/nightingale/v5/src/webapi/config"
 
 	"context"
+)
+
+const (
+	Dingtalk = "dingtalk"
+	Wecom    = "wecom"
+	Feishu   = "feishu"
+	Mm       = "mm"
+	Telegram = "telegram"
+	Email    = "email"
+
+	DingtalkKey = "dingtalk_robot_token"
+	WecomKey    = "wecom_robot_token"
+	FeishuKey   = "feishu_robot_token"
+	MmKey       = "mm_webhook_url"
+	TelegramKey = "telegram_robot_token"
 )
 
 //UserStructTableName 表名常量,方便直接调用
@@ -668,4 +685,54 @@ func (u *User) UserGroups(limit int, query string) ([]UserGroup, error) {
 	finder.Append("And name like ?", "%"+query+"%")
 	err = zorm.Query(ctx, finder, &lst, page)
 	return lst, err
+}
+
+func (u *User) ExtractToken(key string) (string, bool) {
+	bs, err := u.Contacts.MarshalJSON()
+	if err != nil {
+		logger.Errorf("handle_notice: failed to marshal contacts: %v", err)
+		return "", false
+	}
+
+	switch key {
+	case Dingtalk:
+		ret := gjson.GetBytes(bs, DingtalkKey)
+		return ret.String(), ret.Exists()
+	case Wecom:
+		ret := gjson.GetBytes(bs, WecomKey)
+		return ret.String(), ret.Exists()
+	case Feishu:
+		ret := gjson.GetBytes(bs, FeishuKey)
+		return ret.String(), ret.Exists()
+	case Mm:
+		ret := gjson.GetBytes(bs, MmKey)
+		return ret.String(), ret.Exists()
+	case Telegram:
+		ret := gjson.GetBytes(bs, TelegramKey)
+		return ret.String(), ret.Exists()
+	case Email:
+		return u.Email, u.Email != ""
+	default:
+		return "", false
+	}
+}
+
+func (u *User) ExtractAllToken() map[string]string {
+	ret := make(map[string]string)
+	if u.Email != "" {
+		ret[Email] = u.Email
+	}
+
+	bs, err := u.Contacts.MarshalJSON()
+	if err != nil {
+		logger.Errorf("handle_notice: failed to marshal contacts: %v", err)
+		return ret
+	}
+
+	ret[Dingtalk] = gjson.GetBytes(bs, DingtalkKey).String()
+	ret[Wecom] = gjson.GetBytes(bs, WecomKey).String()
+	ret[Feishu] = gjson.GetBytes(bs, FeishuKey).String()
+	ret[Mm] = gjson.GetBytes(bs, MmKey).String()
+	ret[Telegram] = gjson.GetBytes(bs, TelegramKey).String()
+	return ret
 }

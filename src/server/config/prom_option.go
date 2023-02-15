@@ -1,6 +1,10 @@
 package config
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/didi/nightingale/v5/src/pkg/tls"
+)
 
 type PromOption struct {
 	ClusterName   string
@@ -10,6 +14,9 @@ type PromOption struct {
 
 	Timeout     int64
 	DialTimeout int64
+
+	UseTLS bool
+	tls.ClientConfig
 
 	MaxIdleConnsPerHost int
 
@@ -62,12 +69,6 @@ type PromOptionsStruct struct {
 func (pos *PromOptionsStruct) Set(clusterName string, po PromOption) {
 	pos.Lock()
 	pos.Data[clusterName] = po
-	pos.Unlock()
-}
-
-func (pos *PromOptionsStruct) Sets(clusterName string, po PromOption) {
-	pos.Lock()
-	pos.Data = map[string]PromOption{clusterName: po}
 	pos.Unlock()
 }
 
