@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"gitee.com/chunanyong/zorm"
 	"github.com/didi/nightingale/v5/src/pkg/ormx"
 	"github.com/didi/nightingale/v5/src/pkg/tls"
-	"github.com/go-redis/redis/v9"
-	"gitee.com/chunanyong/zorm"
+	"github.com/redis/go-redis/v9"
 )
 
 var DB *zorm.DBDao
