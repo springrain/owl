@@ -707,8 +707,10 @@ func AlertRuleGets(ctx *ctx.Context, groupId int64) ([]AlertRule, error) {
 
 func AlertRuleGetsByBGIds(ctx *ctx.Context, bgids []int64) ([]AlertRule, error) {
 	//session := DB(ctx).Where("group_id in (?)", bgids).Order("name")
-	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE group_id in (?) order by name asc ", bgids)
-
+	finder := zorm.NewSelectFinder(AlertRuleTableName)
+	if len(bgids) > 0 {
+		finder.Append("WHERE group_id in (?) order by name asc ", bgids)
+	}
 	lst := make([]AlertRule, 0)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := session.Find(&lst).Error
@@ -839,6 +841,18 @@ func AlertRuleGetName(ctx *ctx.Context, id int64) (string, error) {
 		return "", nil
 	}
 	return names[0], nil
+}
+func AlertRuleGetsByIds(ctx *ctx.Context, ids []int64) ([]AlertRule, error) {
+	lst := make([]AlertRule, 0, len(ids))
+	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE id in (?)", ids)
+	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//err := DB(ctx).Model(new(AlertRule)).Where("id in ?", ids).Find(&lst).Error
+	if err == nil {
+		for i := 0; i < len(lst); i++ {
+			lst[i].DB2FE()
+		}
+	}
+	return lst, err
 }
 
 func AlertRuleStatistics(ctx *ctx.Context) (*Statistics, error) {
@@ -990,4 +1004,55 @@ func AlertRuleUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error {
 
 	}
 	return nil
+}
+
+func GetTargetsOfHostAlertRule(ctx *ctx.Context, engineName string) (map[string]map[int64][]string, error) {
+	if !ctx.IsCenter {
+		m, err := poster.GetByUrls[map[string]map[int64][]string](ctx, "/v1/n9e/targets-of-alert-rule?engine_name="+engineName)
+		return m, err
+	}
+
+	m := make(map[string]map[int64][]string)
+	hostAlertRules, err := AlertRulesGetsBy(ctx, []string{"host"}, "", "", "", []string{}, 0)
+	if err != nil {
+		return m, err
+	}
+
+	for i := 0; i < len(hostAlertRules); i++ {
+		var rule *HostRuleConfig
+		if err := json.Unmarshal([]byte(hostAlertRules[i].RuleConfig), &rule); err != nil {
+			logger.Errorf("rule:%d rule_config:%s, error:%v", hostAlertRules[i].Id, hostAlertRules[i].RuleConfig, err)
+			continue
+		}
+
+		if rule == nil {
+			logger.Errorf("rule:%d rule_config:%s, error:rule is nil", hostAlertRules[i].Id, hostAlertRules[i].RuleConfig)
+			continue
+		}
+
+		query := GetHostsQuery(rule.Queries)
+		finder, _ := TargetFilterQueryBuild(ctx, "*", query, 0, 0)
+		var lst = make([]*Target, 0)
+		//err := session.Find(&lst).Error
+		err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+		if err != nil {
+			logger.Errorf("failed to query targets: %v", err)
+			continue
+		}
+
+		for _, target := range lst {
+			if _, exists := m[target.EngineName]; !exists {
+				m[target.EngineName] = make(map[int64][]string)
+			}
+
+			if _, exists := m[target.EngineName][hostAlertRules[i].Id]; !exists {
+				m[target.EngineName][hostAlertRules[i].Id] = []string{}
+			}
+
+			m[target.EngineName][hostAlertRules[i].Id] = append(m[target.EngineName][hostAlertRules[i].Id], target.Ident)
+			logger.Debugf("get_targets_of_alert_rule engine:%s, rule:%d, target:%s", target.EngineName, hostAlertRules[i].Id, target.Ident)
+		}
+	}
+
+	return m, nil
 }

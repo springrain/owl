@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -150,6 +151,18 @@ func ConfigsSetWithUname(ctx *ctx.Context, ckey, cval, uName string) error { //b
 	}
 
 	return err
+}
+
+func ConfigsGetFlashDutyAppKey(ctx *ctx.Context) (string, error) {
+	configs, err := ConfigsSelectByCkey(ctx, "flashduty_app_key")
+	if err != nil {
+		return "", err
+	}
+	if len(configs) == 0 || configs[0].Cval == "" {
+		//return "", errors.New("flashduty_app_key is empty")
+		return "", errors.New("flashduty_app_key is empty")
+	}
+	return configs[0].Cval, nil
 }
 
 func ConfigsSelectByCkey(ctx *ctx.Context, ckey string) ([]Configs, error) {

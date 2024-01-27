@@ -655,20 +655,18 @@ func AlertCurEventUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error
 // AlertCurEventGetsFromAlertMute find current events from db.
 func AlertCurEventGetsFromAlertMute(ctx *ctx.Context, alertMute *AlertMute) ([]*AlertCurEvent, error) {
 	var lst []*AlertCurEvent
-	finder := zorm.NewSelectFinder(AlertCurEventTableName).Append("WHERE group_id = ? and rule_prod = ?", alertMute.GroupId, alertMute.Prod)
-	//tx := DB(ctx).Where("group_id = ? and rule_prod = ?", alertMute.GroupId, alertMute.Prod)
+	finder := zorm.NewSelectFinder(AlertCurEventTableName).Append("WHERE group_id = ?", alertMute.GroupId)
+	//tx := DB(ctx).Where("group_id = ?", alertMute.GroupId)
 	if len(alertMute.SeveritiesJson) != 0 {
 		finder.Append("and severity IN (?)", alertMute.SeveritiesJson)
 		//tx = tx.Where("severity IN (?)", alertMute.SeveritiesJson)
 	}
-	if alertMute.Prod != HOST {
-		finder.Append("and cate = ?", alertMute.Cate)
-		//tx = tx.Where("cate = ?", alertMute.Cate)
-		if alertMute.DatasourceIdsJson != nil && !IsAllDatasource(alertMute.DatasourceIdsJson) {
-			finder.Append("and datasource_id IN (?)", alertMute.DatasourceIdsJson)
-			//tx = tx.Where("datasource_id IN (?)", alertMute.DatasourceIdsJson)
-		}
+
+	if len(alertMute.DatasourceIdsJson) != 0 && !IsAllDatasource(alertMute.DatasourceIdsJson) {
+		finder.Append("and datasource_id IN (?)", alertMute.DatasourceIdsJson)
+		//tx = tx.Where("datasource_id IN (?)", alertMute.DatasourceIdsJson)
 	}
+
 	finder.Append("order by id desc")
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := tx.Order("id desc").Find(&lst).Error

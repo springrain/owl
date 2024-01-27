@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ccfos/nightingale/v6/alert/aconf"
 	"github.com/ccfos/nightingale/v6/center/cconf"
 	"github.com/ccfos/nightingale/v6/center/cstats"
 	"github.com/ccfos/nightingale/v6/center/metas"
@@ -33,6 +34,7 @@ import (
 type Router struct {
 	HTTP              httpx.Config
 	Center            cconf.Center
+	Alert             aconf.Alert
 	Operations        cconf.Operation
 	DatasourceCache   *memsto.DatasourceCacheType
 	NotifyConfigCache *memsto.NotifyConfigCacheType
@@ -48,10 +50,11 @@ type Router struct {
 	Ctx               *ctx.Context
 }
 
-func New(httpConfig httpx.Config, center cconf.Center, operations cconf.Operation, ds *memsto.DatasourceCacheType, ncc *memsto.NotifyConfigCacheType, pc *prom.PromClientMap, tdendgineClients *tdengine.TdengineClientMap, redis storage.Redis, sso *sso.SsoClient, ctx *ctx.Context, metaSet *metas.Set, idents *idents.Set, tc *memsto.TargetCacheType, uc *memsto.UserCacheType, ugc *memsto.UserGroupCacheType) *Router {
+func New(httpConfig httpx.Config, center cconf.Center, alert aconf.Alert, operations cconf.Operation, ds *memsto.DatasourceCacheType, ncc *memsto.NotifyConfigCacheType, pc *prom.PromClientMap, tdendgineClients *tdengine.TdengineClientMap, redis storage.Redis, sso *sso.SsoClient, ctx *ctx.Context, metaSet *metas.Set, idents *idents.Set, tc *memsto.TargetCacheType, uc *memsto.UserCacheType, ugc *memsto.UserGroupCacheType) *Router {
 	return &Router{
 		HTTP:              httpConfig,
 		Center:            center,
+		Alert:             alert,
 		Operations:        operations,
 		DatasourceCache:   ds,
 		NotifyConfigCache: ncc,
@@ -268,6 +271,7 @@ func (rt *Router) Config(r *gin.Engine) {
 		pages.GET("/integrations/icon/:cate/:name", rt.builtinIcon)
 		pages.GET("/integrations/makedown/:cate", rt.builtinMarkdown)
 
+		pages.GET("/busi-groups/public-boards", rt.auth(), rt.user(), rt.perm("/dashboards"), rt.publicBoardGets)
 		pages.GET("/busi-groups/boards", rt.auth(), rt.user(), rt.perm("/dashboards"), rt.boardGetsByGids)
 		pages.GET("/busi-group/:id/boards", rt.auth(), rt.user(), rt.perm("/dashboards"), rt.bgro(), rt.boardGets)
 		pages.POST("/busi-group/:id/boards", rt.auth(), rt.user(), rt.perm("/dashboards/add"), rt.bgrw(), rt.boardAdd)
@@ -499,6 +503,9 @@ func (rt *Router) Config(r *gin.Engine) {
 			service.POST("/task-record-add", rt.taskRecordAdd)
 
 			service.GET("/user-variable/decrypt", rt.userVariableGetDecryptByService)
+
+			service.GET("/targets-of-alert-rule", rt.targetsOfAlertRule)
+
 		}
 	}
 

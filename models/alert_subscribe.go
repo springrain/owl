@@ -53,6 +53,9 @@ type AlertSubscribe struct {
 	ITags             []TagFilter  `json:"-"` // inner tags
 	BusiGroups        ormx.JSONArr `json:"busi_groups" column:"busi_groups"`
 	IBusiGroups       []TagFilter  `json:"-"` // inner busiGroups
+	RuleIdsJson       []int64      `json:"rule_ids"`
+	RuleIds           string       `json:"-" column:"rule_ids"`
+	RuleNames         []string     `json:"rule_names"`
 }
 
 func (s *AlertSubscribe) GetTableName() string {
@@ -152,6 +155,11 @@ func (s *AlertSubscribe) FE2DB() error {
 		s.Severities = string(b)
 	}
 
+	if len(s.RuleIdsJson) > 0 {
+		b, _ := json.Marshal(s.RuleIdsJson)
+		s.RuleIds = string(b)
+	}
+
 	return nil
 }
 
@@ -176,6 +184,12 @@ func (s *AlertSubscribe) DB2FE() error {
 
 	if s.Severities != "" {
 		if err := json.Unmarshal([]byte(s.Severities), &s.SeveritiesJson); err != nil {
+			return err
+		}
+	}
+
+	if s.RuleIds != "" {
+		if err := json.Unmarshal([]byte(s.RuleIds), &s.RuleIdsJson); err != nil {
 			return err
 		}
 	}
@@ -208,29 +222,52 @@ func (s *AlertSubscribe) Add(ctx *ctx.Context) error {
 	return Insert(ctx, s)
 }
 
-func (s *AlertSubscribe) FillRuleName(ctx *ctx.Context, cache map[int64]string) error {
-	if s.RuleId <= 0 {
-		s.RuleName = ""
+func (s *AlertSubscribe) CompatibleWithOldRuleId() {
+	if len(s.RuleIdsJson) == 0 && s.RuleId != 0 {
+		s.RuleIdsJson = append(s.RuleIdsJson, s.RuleId)
+	}
+}
+
+func (s *AlertSubscribe) FillRuleNames(ctx *ctx.Context, cache map[int64]string) error {
+	s.CompatibleWithOldRuleId()
+	if len(s.RuleIdsJson) == 0 {
 		return nil
 	}
 
-	name, has := cache[s.RuleId]
-	if has {
-		s.RuleName = name
-		return nil
+	idNameHas := make(map[int64]string, len(s.RuleIdsJson))
+	idsNotInCache := make([]int64, 0)
+	for _, rid := range s.RuleIdsJson {
+		rname, exist := cache[rid]
+		if exist {
+			idNameHas[rid] = rname
+		} else {
+			idsNotInCache = append(idsNotInCache, rid)
+		}
 	}
 
-	name, err := AlertRuleGetName(ctx, s.RuleId)
-	if err != nil {
-		return err
+	if len(idsNotInCache) > 0 {
+		lst, err := AlertRuleGetsByIds(ctx, idsNotInCache)
+		if err != nil {
+			return err
+		}
+		for _, alterRule := range lst {
+			idNameHas[alterRule.Id] = alterRule.Name
+			cache[alterRule.Id] = alterRule.Name
+		}
 	}
 
-	if name == "" {
-		name = "Error: AlertRule not found"
+	names := make([]string, len(s.RuleIdsJson))
+	for i, rid := range s.RuleIdsJson {
+		if name, exist := idNameHas[rid]; exist {
+			names[i] = name
+		} else if rid == 0 {
+			names[i] = ""
+		} else {
+			names[i] = "Error: AlertRule not found"
+		}
 	}
+	s.RuleNames = names
 
-	s.RuleName = name
-	cache[s.RuleId] = name
 	return nil
 }
 

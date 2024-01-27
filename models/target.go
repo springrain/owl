@@ -28,6 +28,7 @@ type Target struct {
 	UpdateAt     int64             `json:"update_at" column:"update_at"`
 	HostIp       string            `json:"host_ip" column:"host_ip"` //ipv4，do not needs range select
 	AgentVersion string            `json:"agent_version" column:"agent_version"`
+	EngineName   string            `json:"engine_name" column:"engine_name"`
 	UnixTime     int64             `json:"unixtime"`
 	Offset       int64             `json:"offset"`
 	TargetUp     float64           `json:"target_up"`

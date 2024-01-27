@@ -194,6 +194,7 @@ CREATE TABLE `board`  (
   `is_public` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0:false 1:true',
   `built_in` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0:false 1:true',
   `hide` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0:false 1:true',
+  `public_cate` int NOT NULL DEFAULT 0 COMMENT '0 anonymous 1 login 2 busi',
   `create_at` bigint NOT NULL DEFAULT 0,
   `create_by` varchar(64)  NOT NULL DEFAULT '',
   `update_at` bigint NOT NULL DEFAULT 0,
@@ -208,6 +209,12 @@ CREATE TABLE `board_payload`  (
   `id` bigint UNSIGNED NOT NULL COMMENT 'dashboard id',
   `payload` mediumtext  NOT NULL,
   UNIQUE KEY (`id`)
+) ENGINE = InnoDB CHARACTER SET = utf8mb4;
+
+-- board_busigroup
+CREATE TABLE `board_busigroup`  (
+  `busi_group_id` bigint NOT NULL COMMENT 'busi group id',
+  `board_id` bigint  NOT NULL COMMENT 'board id'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4;
 
 -- deprecated
@@ -351,6 +358,7 @@ CREATE TABLE `alert_subscribe`  (
   `update_at` bigint NOT NULL DEFAULT 0,
   `update_by` varchar(64)  NOT NULL DEFAULT '',
   `busi_groups` varchar(4096)  NOT NULL DEFAULT '[]',
+  `rule_ids` VARCHAR(1024) DEFAULT '' COMMENT 'rule_ids',
   PRIMARY KEY (`id`),
   KEY (`update_at`),
   KEY (`group_id`)
@@ -365,6 +373,7 @@ CREATE TABLE `target`  (
   `update_at` bigint NOT NULL DEFAULT 0,
   `host_ip` varchar(191)  NULL DEFAULT '' COMMENT 'IPv4 string',
   `agent_version` varchar(255) NULL DEFAULT '' COMMENT 'agent version',
+  `engine_name` VARCHAR(255) DEFAULT '' COMMENT 'engine_name',
   PRIMARY KEY (`id`),
   UNIQUE KEY (`ident`),
   INDEX idx_host_ip(`host_ip`),
@@ -555,7 +564,7 @@ CREATE TABLE `task_tpl_host`  (
 
 CREATE TABLE `task_record`  (
   `id` bigint UNSIGNED NOT NULL COMMENT 'ibex task id',
-  `event_id` bigint NOT NULL DEFAULT 0 COMMENT 'event id',
+  `event_id` BIGINT NOT NULL DEFAULT 0 COMMENT 'event id',
   `group_id` bigint NOT NULL COMMENT 'busi group id',
   `ibex_address` varchar(128)  NOT NULL,
   `ibex_auth_user` varchar(128)  NOT NULL DEFAULT '',

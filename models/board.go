@@ -12,24 +12,31 @@ import (
 	"github.com/toolkits/pkg/str"
 )
 
-const BoardTableName = "board"
+const (
+	BoardTableName  = "board"
+	PublicAnonymous = 0
+	PublicLogin     = 1
+	PublicBusi      = 2
+)
 
 type Board struct {
 	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
-	Id       int64  `json:"id" column:"id"`
-	GroupId  int64  `json:"group_id" column:"group_id"`
-	Name     string `json:"name" column:"name"`
-	Ident    string `json:"ident" column:"ident"`
-	Tags     string `json:"tags" column:"tags"`
-	CreateAt int64  `json:"create_at" column:"create_at"`
-	CreateBy string `json:"create_by" column:"create_by"`
-	UpdateAt int64  `json:"update_at" column:"update_at"`
-	UpdateBy string `json:"update_by" column:"update_by"`
-	Configs  string `json:"configs"`
-	Public   int    `json:"public" column:"is_public"`  // 0: false, 1: true
-	BuiltIn  int    `json:"built_in" column:"built_in"` // 0: false, 1: true
-	Hide     int    `json:"hide" column:"hide"`         // 0: false, 1: true
+	Id         int64   `json:"id" column:"id"`
+	GroupId    int64   `json:"group_id" column:"group_id"`
+	Name       string  `json:"name" column:"name"`
+	Ident      string  `json:"ident" column:"ident"`
+	Tags       string  `json:"tags" column:"tags"`
+	CreateAt   int64   `json:"create_at" column:"create_at"`
+	CreateBy   string  `json:"create_by" column:"create_by"`
+	UpdateAt   int64   `json:"update_at" column:"update_at"`
+	UpdateBy   string  `json:"update_by" column:"update_by"`
+	Configs    string  `json:"configs"`
+	Public     int     `json:"public" column:"is_public"`        // 0: false, 1: true
+	PublicCate int     `json:"public_cate" column:"public_cate"` // 0: anonymous, 1: login, 2: busi
+	Bgids      []int64 `json:"bgids"`
+	BuiltIn    int     `json:"built_in" column:"built_in"` // 0: false, 1: true
+	Hide       int     `json:"hide" column:"hide"`         // 0: false, 1: true
 }
 
 func (b *Board) GetTableName() string {
@@ -210,7 +217,10 @@ func BoardGetsByGroupId(ctx *ctx.Context, groupId int64, query string) ([]Board,
 
 func BoardGetsByBGIds(ctx *ctx.Context, gids []int64, query string) ([]Board, error) {
 	//session := DB(ctx).Where("group_id in (?)", gids).Order("name")
-	finder := zorm.NewSelectFinder(BoardTableName).Append("WHERE group_id in (?)", gids)
+	finder := zorm.NewSelectFinder(BoardTableName).Append("WHERE 1=1")
+	if len(gids) > 0 {
+		finder.Append("and group_id in (?)", gids)
+	}
 	arr := strings.Fields(query)
 	if len(arr) > 0 {
 		for i := 0; i < len(arr); i++ {

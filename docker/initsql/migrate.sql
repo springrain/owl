@@ -3,9 +3,10 @@ use n9e_v6;
 -- Alter table for AlertSubscribe
 ALTER TABLE alert_subscribe ADD COLUMN busi_groups VARCHAR(4096) NOT NULL DEFAULT '[]';
 ALTER TABLE alert_subscribe ADD COLUMN note VARCHAR(1024) DEFAULT '' COMMENT 'note';
+ALTER TABLE alert_subscribe ADD COLUMN rule_ids VARCHAR(1024) DEFAULT '' COMMENT 'rule_ids';
 
 -- Alter table for TaskRecord
-ALTER TABLE task_records ADD COLUMN event_id BIGINT(20) NOT NULL DEFAULT 0 COMMENT 'event id';
+ALTER TABLE task_record ADD COLUMN event_id BIGINT(20) NOT NULL DEFAULT 0 COMMENT 'event id';
 
 -- Alter table for AlertHisEvent
 CREATE INDEX idx_last_eval_time ON alert_his_event (last_eval_time);
@@ -13,6 +14,7 @@ CREATE INDEX idx_last_eval_time ON alert_his_event (last_eval_time);
 -- Alter table for Target
 ALTER TABLE target ADD COLUMN host_ip VARCHAR(15) DEFAULT '' COMMENT 'IPv4 string';
 ALTER TABLE target ADD COLUMN agent_version VARCHAR(255) DEFAULT '' COMMENT 'agent version';
+ALTER TABLE target ADD COLUMN engine_name VARCHAR(255) DEFAULT '' COMMENT 'engine_name';
 
 -- Alter table for Datasource
 ALTER TABLE datasource ADD COLUMN is_default TINYINT NOT NULL DEFAULT 0 COMMENT 'is default datasource';

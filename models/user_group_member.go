@@ -32,6 +32,16 @@ func MyGroupIds(ctx *ctx.Context, userId int64) ([]int64, error) {
 	return ids, err
 }
 
+// my business group ids
+func MyBusiGroupIds(ctx *ctx.Context, userId int64) ([]int64, error) {
+	groupIds, err := MyGroupIds(ctx, userId)
+	if err != nil {
+		return []int64{}, err
+	}
+
+	return BusiGroupIds(ctx, groupIds)
+}
+
 func MemberIds(ctx *ctx.Context, groupId int64) ([]int64, error) {
 	ids := make([]int64, 0)
 	finder := zorm.NewSelectFinder(UserGroupMemberTableName, "user_id").Append("WHERE group_id=?", groupId)

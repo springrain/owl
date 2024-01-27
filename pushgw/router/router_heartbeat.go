@@ -40,5 +40,9 @@ func (rt *Router) heartbeat(c *gin.Context) {
 	req.RemoteAddr = c.ClientIP()
 	gid := ginx.QueryStr(c, "gid", "")
 
+	req.EngineName = rt.Aconf.Heartbeat.EngineName
+
+	rt.MetaSet.Set(req.Hostname, req)
+
 	ginx.NewRender(c).Message(poster.PostByUrls(rt.Ctx, "/v1/n9e/heartbeat?gid="+gid, req))
 }
