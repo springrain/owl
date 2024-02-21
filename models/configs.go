@@ -166,6 +166,9 @@ func ConfigsGetFlashDutyAppKey(ctx *ctx.Context) (string, error) {
 }
 
 func ConfigsSelectByCkey(ctx *ctx.Context, ckey string) ([]Configs, error) {
+	if !ctx.IsCenter {
+		return []Configs{}, nil
+	}
 	objs := make([]Configs, 0)
 
 	finder := zorm.NewSelectFinder(ConfigsTableName).Append("WHERE ckey=?", ckey)

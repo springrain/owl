@@ -9,6 +9,7 @@ import (
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
+	"github.com/google/uuid"
 	"github.com/toolkits/pkg/str"
 )
 
@@ -59,6 +60,22 @@ func (b *Board) Verify() error {
 	return nil
 }
 
+func (b *Board) Clone(operatorName string, newBgid int64) *Board {
+	clone := &Board{
+		Name:     b.Name + " Cloned",
+		Tags:     b.Tags,
+		GroupId:  newBgid,
+		CreateBy: operatorName,
+		UpdateBy: operatorName,
+	}
+
+	if b.Ident != "" {
+		clone.Ident = uuid.NewString()
+	}
+
+	return clone
+}
+
 func (b *Board) CanRenameIdent(ctx *ctx.Context, ident string) (bool, error) {
 	if ident == "" {
 		return true, nil
@@ -100,7 +117,45 @@ func (b *Board) Add(ctx *ctx.Context) error {
 	return Insert(ctx, b)
 }
 
-func (b *Board) Update(ctx *ctx.Context, selectFields ...string) error {
+func (b *Board) AtomicAdd(c *ctx.Context, payload string) error {
+	_, err := zorm.Transaction(c.Ctx, func(ctx context.Context) (interface{}, error) {
+		c.Ctx = ctx
+		if err := b.Add(c); err != nil {
+			return nil, err
+		}
+
+		if payload != "" {
+			if err := BoardPayloadSave(c, b.Id, payload); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+
+	})
+
+	return err
+
+	/*
+		return DB(c).Transaction(func(tx *gorm.DB) error {
+			tCtx := &ctx.Context{
+				DB: tx,
+			}
+
+			if err := b.Add(tCtx); err != nil {
+				return err
+			}
+
+			if payload != "" {
+				if err := BoardPayloadSave(tCtx, b.Id, payload); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	*/
+}
+
+func (b *Board) Update(ctx *ctx.Context, selectField interface{}, selectFields ...string) error {
 	if err := b.Verify(); err != nil {
 		return err
 	}
