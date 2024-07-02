@@ -36,11 +36,11 @@ func (d *Dashboard) GetTableName() string {
 
 func (d *Dashboard) Verify() error {
 	if d.Name == "" {
-		return errors.New("Name is blank")
+		return errors.New("name is blank")
 	}
 
 	if str.Dangerous(d.Name) {
-		return errors.New("Name has invalid characters")
+		return errors.New("name has invalid characters")
 	}
 
 	return nil

@@ -83,7 +83,7 @@ func (ds *Datasource) GetTableName() string {
 
 func (ds *Datasource) Verify() error {
 	if str.Dangerous(ds.Name) {
-		return errors.New("Name has invalid characters")
+		return errors.New("name has invalid characters")
 	}
 
 	err := ds.FE2DB()

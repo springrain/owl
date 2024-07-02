@@ -460,7 +460,7 @@ func PassLogin(ctx *ctx.Context, redis storage.Redis, username, pass string) (*U
 			incrLoginFailCount(ctx, redis, username, seconds)
 		}
 
-		return nil, fmt.Errorf("Username or password invalid")
+		return nil, fmt.Errorf("username or password invalid")
 	}
 
 	loginPass, err := CryptoPass(ctx, pass)
@@ -472,7 +472,7 @@ func PassLogin(ctx *ctx.Context, redis storage.Redis, username, pass string) (*U
 		if needCheck {
 			incrLoginFailCount(ctx, redis, username, seconds)
 		}
-		return nil, fmt.Errorf("Username or password invalid")
+		return nil, fmt.Errorf("username or password invalid")
 	}
 
 	return user, nil
@@ -552,7 +552,7 @@ func UserGets(ctx *ctx.Context, query string, limit, offset int, stime, etime in
 
 		f := zorm.NewSelectFinder(UserGroupTableName).Append("WHERE id IN (?)", userGroupIDs)
 		users[i].UserGroupsRes = make([]*UserGroupRes, 0)
-		zorm.Query(ctx.Ctx, f, &users[i].UserGroupsRes, nil)
+		err = zorm.Query(ctx.Ctx, f, &users[i].UserGroupsRes, nil)
 		if err != nil {
 			return users, errors.WithMessage(err, "failed to query user_groups")
 		}
@@ -572,7 +572,7 @@ func UserGets(ctx *ctx.Context, query string, limit, offset int, stime, etime in
 
 		f2 := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id IN (?)", busiGroupIDs)
 		users[i].BusiGroupsRes = make([]*BusiGroupRes, 0)
-		zorm.Query(ctx.Ctx, f2, &users[i].BusiGroupsRes, nil)
+		err = zorm.Query(ctx.Ctx, f2, &users[i].BusiGroupsRes, nil)
 		if err != nil {
 			return users, errors.WithMessage(err, "failed to query busi_groups")
 		}

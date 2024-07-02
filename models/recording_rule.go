@@ -89,12 +89,12 @@ func (re *RecordingRule) Verify() error {
 	}
 
 	if re.PromQl != "" && !model.MetricNameRE.MatchString(re.Name) {
-		return errors.New("Name has invalid chreacters")
+		return errors.New("name has invalid chreacters")
 	}
 
 	for _, queryConfig := range re.QueryConfigsJson {
 		if !model.MetricNameRE.MatchString(queryConfig.NewMetric) {
-			return errors.New("Metric Name has invalid chreacters")
+			return errors.New("metric Name has invalid chreacters")
 		}
 	}
 
