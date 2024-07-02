@@ -2,9 +2,9 @@ package router
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 
-	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -97,7 +97,7 @@ func taskHostStdout(c *gin.Context) {
 
 	defer resp.Body.Close()
 
-	bs, err := ioutil.ReadAll(resp.Body)
+	bs, err := io.ReadAll(resp.Body)
 	errorx.Dangerous(err)
 
 	c.Writer.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -130,7 +130,7 @@ func taskHostStderr(c *gin.Context) {
 
 	defer resp.Body.Close()
 
-	bs, err := ioutil.ReadAll(resp.Body)
+	bs, err := io.ReadAll(resp.Body)
 	errorx.Dangerous(err)
 
 	c.Writer.Header().Set("Content-Type", "application/json; charset=UTF-8")

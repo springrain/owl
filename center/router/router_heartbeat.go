@@ -3,7 +3,8 @@ package router
 import (
 	"compress/gzip"
 	"encoding/json"
-	"io/ioutil"
+	"io"
+
 	"sort"
 	"strings"
 	"time"
@@ -27,11 +28,11 @@ func (rt *Router) heartbeat(c *gin.Context) {
 			return
 		}
 		defer r.Close()
-		bs, err = ioutil.ReadAll(r)
+		bs, err = io.ReadAll(r)
 		ginx.Dangerous(err)
 	} else {
 		defer c.Request.Body.Close()
-		bs, err = ioutil.ReadAll(c.Request.Body)
+		bs, err = io.ReadAll(c.Request.Body)
 		ginx.Dangerous(err)
 	}
 
