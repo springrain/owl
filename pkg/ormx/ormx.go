@@ -2,7 +2,6 @@ package ormx
 
 import (
 	"context"
-	"strings"
 
 	"gitee.com/chunanyong/zorm"
 	// 引入数据库驱动
@@ -50,11 +49,6 @@ func New(c DBConfig) (*zorm.DBDao, error) {
 		TDengineInsertsColumnName: c.TDengineInsertsColumnName,
 	}
 	db, err := zorm.NewDBDao(&dbDaoConfig)
-
-	//注册达梦TEXT类型转string插件,dialectColumnType 值是 Dialect.字段类型 ,例如 dm.TEXT
-	if strings.ToLower(c.Dialect) == "dm" {
-		zorm.RegisterCustomDriverValueConver("dm.TEXT", CustomDMText{})
-	}
 	zorm.FuncLogError = zormFuncLogError // 记录异常日志的函数
 	zorm.FuncLogPanic = zormFuncLogError
 	zorm.FuncPrintSQL = zormPrintSQL // 打印sql的函数

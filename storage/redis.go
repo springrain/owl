@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ccfos/nightingale/v6/pkg/tlsx"
 	"github.com/redis/go-redis/v9"
@@ -26,6 +27,10 @@ type RedisConfig struct {
 }
 
 type Redis redis.Cmdable
+
+var Cache Redis
+
+const DEFAULT = time.Hour
 
 func NewRedis(cfg RedisConfig) (Redis, error) {
 	var redisClient Redis
@@ -134,4 +139,14 @@ func MSet(ctx context.Context, r Redis, m map[string]interface{}) error {
 	}
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+const IDINITIAL = 1 << 32
+
+func IdInit() error {
+	return Cache.Set(context.Background(), "id", IDINITIAL, 0).Err()
+}
+
+func IdGet() (int64, error) {
+	return Cache.Incr(context.Background(), "id").Result()
 }

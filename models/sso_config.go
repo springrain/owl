@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 )
@@ -8,19 +10,15 @@ import (
 const SsoConfigTableName = "sso_config"
 
 type SsoConfig struct {
-	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
-	Id      int64  `json:"id" column:"id"`
-	Name    string `json:"name" column:"name"`
-	Content string `json:"content" column:"content"`
+	Id       int64  `json:"id" column:"id"`
+	Name     string `json:"name" column:"name"`
+	Content  string `json:"content" column:"content"`
+	UpdateAt int64  `json:"update_at" column:"update_at"`
 }
 
 func (b *SsoConfig) GetTableName() string {
 	return SsoConfigTableName
-}
-
-func (b *SsoConfig) DB2FE() error {
-	return nil
 }
 
 // get all sso_config
@@ -37,18 +35,26 @@ func (b *SsoConfig) Create(c *ctx.Context) error {
 	return Insert(c, b)
 }
 
-func (b *SsoConfig) Update(ctx *ctx.Context) error {
-	return UpdateColumn(ctx, SsoConfigTableName, b.Id, "content", b.Content)
-	//return DB(c).Model(b).Select("content").Updates(b).Error
+func (b *SsoConfig) Update(c *ctx.Context) error {
+	b.UpdateAt = time.Now().Unix()
+	return Update(c, b, []string{"content", "update_at"})
+	//return DB(c).Model(b).Select("content", "update_at").Updates(b).Error
+}
+
+// get sso_config last update time
+func SsoConfigLastUpdateTime(c *ctx.Context) (int64, error) {
+	var lastUpdateTime int64
+	finer := zorm.NewSelectFinder(SsoConfigTableName, "max(update_at)")
+	_, err := zorm.QueryRow(c.Ctx, finer, &lastUpdateTime)
+	//err := DB(c).Model(&SsoConfig{}).Select("max(update_at)").Row().Scan(&lastUpdateTime)
+	return lastUpdateTime, err
 }
 
 // get sso_config coutn by name
-func SsoConfigCountByName(ctx *ctx.Context, name string) (int64, error) {
+func SsoConfigCountByName(c *ctx.Context, name string) (int64, error) {
 	finder := zorm.NewSelectFinder(SsoConfigTableName, "count(*)").Append("WHERE name = ?", name)
-	return Count(ctx, finder)
-	/*
-		var count int64
-		err := DB(c).Model(&SsoConfig{}).Where("name = ?", name).Count(&count).Error
-		return count, err
-	*/
+	return Count(c, finder)
+	//var count int64
+	//err := DB(c).Model(&SsoConfig{}).Where("name = ?", name).Count(&count).Error
+	//return count, err
 }

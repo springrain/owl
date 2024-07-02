@@ -69,7 +69,7 @@ func (rt *Router) notifyTplUpdate(c *gin.Context) {
 	}
 
 	// get the count of the same channel and name but different id
-	finder := zorm.NewSelectFinder(models.NotifyTplTableName, "COUNT(*)").Append("WHERE channel = ? or name = ? and id <> ?", f.Channel, f.Name, f.Id)
+	finder := zorm.NewSelectFinder(models.NotifyTplTableName, "count(*)").Append("WHERE channel = ? or name = ? and id <> ?", f.Channel, f.Name, f.Id)
 	count, err := models.Count(rt.Ctx, finder)
 	//count, err := models.Count(models.DB(rt.Ctx).Model(&models.NotifyTpl{}).Where("channel = ? or name = ? and id <> ?", f.Channel, f.Name, f.Id))
 	ginx.Dangerous(err)
@@ -166,8 +166,7 @@ func (rt *Router) notifyTplAdd(c *gin.Context) {
 	ginx.BindJSON(c, &f)
 	f.Channel = strings.TrimSpace(f.Channel)
 	ginx.Dangerous(templateValidate(f))
-
-	finder := zorm.NewSelectFinder(models.NotifyTplTableName, "COUNT(*)").Append("WHERE channel = ? or name = ?", f.Channel, f.Name)
+	finder := zorm.NewSelectFinder(models.NotifyTplTableName, "count(*)").Append("WHERE channel = ? or name = ?", f.Channel, f.Name)
 	count, err := models.Count(rt.Ctx, finder)
 	//count, err := models.Count(models.DB(rt.Ctx).Model(&models.NotifyTpl{}).Where("channel = ? or name = ?", f.Channel, f.Name))
 	ginx.Dangerous(err)

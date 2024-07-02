@@ -1,6 +1,8 @@
 package cfg
 
-import "os"
+import (
+	"io/ioutil"
+)
 
 type scanner struct {
 	data []byte
@@ -21,6 +23,6 @@ func (s *scanner) Data() []byte {
 
 func (s *scanner) Read(file string) {
 	if s.err == nil {
-		s.data, s.err = os.ReadFile(file)
+		s.data, s.err = ioutil.ReadFile(file)
 	}
 }

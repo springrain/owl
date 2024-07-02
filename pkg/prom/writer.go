@@ -7,12 +7,11 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/toolkits/pkg/logger"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/protoadapt"
 )
 
 type WriterType struct {
@@ -33,11 +32,11 @@ func (w WriterType) Write(items []prompb.TimeSeries, headers ...map[string]strin
 		return nil
 	}
 
-	req := prompb.WriteRequest{
+	req := &prompb.WriteRequest{
 		Timeseries: items,
 	}
-	reqv2 := protoadapt.MessageV2Of(&req)
-	data, err := proto.Marshal(reqv2)
+
+	data, err := proto.Marshal(req)
 	if err != nil {
 		logger.Warningf("marshal prom data to proto got error: %v, data: %+v", err, items)
 		return nil

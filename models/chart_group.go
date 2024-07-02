@@ -3,10 +3,9 @@ package models
 import (
 	"context"
 
-	"errors"
-
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
 )
 
@@ -45,17 +44,20 @@ func (cg *ChartGroup) Add(ctx *ctx.Context) error {
 	return Insert(ctx, cg)
 }
 
-func (cg *ChartGroup) Update(ctx *ctx.Context, selectFields ...string) error {
+func (cg *ChartGroup) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
 	if err := cg.Verify(); err != nil {
 		return err
 	}
-	return Update(ctx, cg, selectFields)
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, cg, cols)
 	//return DB(ctx).Model(cg).Select(selectField, selectFields...).Updates(cg).Error
 }
 
 func (cg *ChartGroup) Del(ctx *ctx.Context) error {
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("group_id=?", cg.Id).Delete(&Chart{}).Error; err != nil {
 				return err
 			}
@@ -78,7 +80,6 @@ func (cg *ChartGroup) Del(ctx *ctx.Context) error {
 		return zorm.UpdateFinder(ctx, f2)
 	})
 	return err
-
 }
 
 func NewDefaultChartGroup(ctx *ctx.Context, dashId int64) error {

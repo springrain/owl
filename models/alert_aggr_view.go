@@ -30,10 +30,6 @@ func (v *AlertAggrView) GetTableName() string {
 	return AlertAggrViewTableName
 }
 
-func (v *AlertAggrView) DB2FE() error {
-	return nil
-}
-
 func (v *AlertAggrView) Verify() error {
 	v.Name = strings.TrimSpace(v.Name)
 	if v.Name == "" {
@@ -96,9 +92,7 @@ func (v *AlertAggrView) Update(ctx *ctx.Context) error {
 		return err
 	}
 	v.UpdateAt = time.Now().Unix()
-	finder := zorm.NewUpdateFinder(AlertAggrViewTableName)
-	finder.Append("name=?,rule=?,cate=?,update_at=?,create_by=? WHERE id=?", v.Name, v.Rule, v.Cate, v.UpdateAt, v.CreateBy, v.Id)
-	return UpdateFinder(ctx, finder)
+	return Update(ctx, v, []string{"name", "rule", "cate", "update_at", "create_by"})
 	//return DB(ctx).Model(v).Select("name", "rule", "cate", "update_at", "create_by").Updates(v).Error
 }
 
@@ -110,23 +104,18 @@ func AlertAggrViewDel(ctx *ctx.Context, ids []int64, createBy ...interface{}) er
 	finder := zorm.NewDeleteFinder(AlertAggrViewTableName).Append("WHERE id in (?) ", ids)
 	if len(createBy) > 0 {
 		finder.Append(" and create_by = ?", createBy)
+		//return DB(ctx).Where("id in ? and create_by = ?", ids, createBy).Delete(new(AlertAggrView)).Error
 	}
 	return UpdateFinder(ctx, finder)
-	/*
-		if len(createBy) > 0 {
-			return DB(ctx).Where("id in ? and create_by = ?", ids, createBy).Delete(new(AlertAggrView)).Error
-		}
-
-		return DB(ctx).Where("id in ?", ids).Delete(new(AlertAggrView)).Error
-	*/
+	//return DB(ctx).Where("id in ?", ids).Delete(new(AlertAggrView)).Error
 }
 
 func AlertAggrViewGets(ctx *ctx.Context, createBy interface{}) ([]AlertAggrView, error) {
 	lst := make([]AlertAggrView, 0)
 	finder := zorm.NewSelectFinder(AlertAggrViewTableName).Append("WHERE create_by = ? or cate = 0", createBy)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []AlertAggrView
 	//err := DB(ctx).Where("create_by = ? or cate = 0", createBy).Find(&lst).Error
-
 	if err == nil && len(lst) > 1 {
 		sort.Slice(lst, func(i, j int) bool {
 			if lst[i].Cate < lst[j].Cate {
@@ -144,16 +133,22 @@ func AlertAggrViewGets(ctx *ctx.Context, createBy interface{}) ([]AlertAggrView,
 }
 
 func AlertAggrViewGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertAggrView, error) {
-	lst := make([]AlertAggrView, 0)
+	lst := make([]*AlertAggrView, 0)
 	finder := zorm.NewSelectFinder(AlertAggrViewTableName)
 	AppendWhere(finder, where, args...)
-	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	page := zorm.NewPage()
+	page.PageNo = 1
+	page.PageSize = 1
+	err := zorm.Query(ctx.Ctx, finder, &lst, page)
+	//var lst []*AlertAggrView
 	//err := DB(ctx).Where(where, args...).Find(&lst).Error
 	if err != nil {
 		return nil, err
 	}
+
 	if len(lst) == 0 {
 		return nil, nil
 	}
-	return &lst[0], nil
+
+	return lst[0], nil
 }

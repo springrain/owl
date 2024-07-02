@@ -8,6 +8,8 @@ import (
 	"github.com/ccfos/nightingale/v6/dumper"
 	"github.com/ccfos/nightingale/v6/models"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
+
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 )
 
@@ -120,7 +122,7 @@ func (c *AlertSubscribeCacheType) syncAlertSubscribes() error {
 	stat, err := models.AlertSubscribeStatistics(c.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("alert_subscribes", start.Unix(), -1, -1, "failed to query statistics: "+err.Error())
-		return fmt.Errorf("failed to exec AlertSubscribeStatistics:%w", err)
+		return errors.WithMessage(err, "failed to exec AlertSubscribeStatistics")
 	}
 
 	if !c.StatChanged(stat.Total, stat.LastUpdated) {
@@ -133,7 +135,7 @@ func (c *AlertSubscribeCacheType) syncAlertSubscribes() error {
 	lst, err := models.AlertSubscribeGetsAll(c.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("alert_subscribes", start.Unix(), -1, -1, "failed to query records: "+err.Error())
-		return fmt.Errorf("failed to exec AlertSubscribeGetsAll:%w", err)
+		return errors.WithMessage(err, "failed to exec AlertSubscribeGetsAll")
 	}
 
 	subs := make(map[int64][]*models.AlertSubscribe)

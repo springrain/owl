@@ -1,7 +1,13 @@
 {
+    "id": 0,
+    "group_id": 0,
     "name": "Windows Host by Categraf",
-    "tags": "Categraf",
     "ident": "",
+    "tags": "Categraf",
+    "create_at": 0,
+    "create_by": "",
+    "update_at": 0,
+    "update_by": "",
     "configs": {
         "links": [
             {
@@ -267,10 +273,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -345,10 +351,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -410,10 +416,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -506,8 +512,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
+                    "lineWidth": 2,
                     "stack": "off"
                 },
                 "datasourceCate": "prometheus",
@@ -567,10 +575,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -631,10 +639,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -709,8 +717,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
+                    "lineWidth": 2,
                     "stack": "off"
                 },
                 "datasourceCate": "prometheus",
@@ -759,10 +769,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -827,10 +837,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -892,10 +902,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -966,10 +976,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -1034,10 +1044,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -1101,10 +1111,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -1168,10 +1178,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
-                    "gradientMode": "none",
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
-                    "lineWidth": 1,
+                    "lineWidth": 2,
                     "scaleDistribution": {
                         "type": "linear"
                     },
@@ -1235,8 +1245,10 @@
             {
                 "custom": {
                     "drawStyle": "lines",
-                    "fillOpacity": 0.5,
+                    "fillOpacity": 0.3,
+                    "gradientMode": "opacity",
                     "lineInterpolation": "smooth",
+                    "lineWidth": 2,
                     "stack": "off"
                 },
                 "datasourceCate": "prometheus",
@@ -1287,17 +1299,23 @@
                 "type": "datasource"
             },
             {
-                "name": "ident",
-                "type": "query",
+                "allOption": true,
                 "datasource": {
                     "cate": "prometheus",
                     "value": "${prom}"
                 },
                 "definition": "label_values(disk_used_percent{device=~\".+:\"},ident)",
                 "multi": true,
-                "allOption": true
+                "name": "ident",
+                "type": "query"
             }
         ],
         "version": "3.0.0"
-    }
+    },
+    "public": 0,
+    "public_cate": 0,
+    "bgids": null,
+    "built_in": 0,
+    "hide": 0,
+    "uuid": 1717556328480192000
 }

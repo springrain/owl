@@ -29,10 +29,6 @@ func (v *MetricView) GetTableName() string {
 	return MetricViewTableName
 }
 
-func (v *MetricView) DB2FE() error {
-	return nil
-}
-
 func (v *MetricView) Verify() error {
 	v.Name = strings.TrimSpace(v.Name)
 	if v.Name == "" {

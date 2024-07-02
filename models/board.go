@@ -5,20 +5,20 @@ import (
 	"strings"
 	"time"
 
-	"errors"
-
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
+
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
 )
 
 const (
-	BoardTableName  = "board"
 	PublicAnonymous = 0
 	PublicLogin     = 1
 	PublicBusi      = 2
 )
+const BoardTableName = "board"
 
 type Board struct {
 	// 引入默认的struct,隔离IEntityStruct的方法改动
@@ -33,7 +33,7 @@ type Board struct {
 	UpdateAt   int64   `json:"update_at" column:"update_at"`
 	UpdateBy   string  `json:"update_by" column:"update_by"`
 	Configs    string  `json:"configs"`
-	Public     int     `json:"public" column:"is_public"`        // 0: false, 1: true
+	Public     int     `json:"public" column:"public"`           // 0: false, 1: true
 	PublicCate int     `json:"public_cate" column:"public_cate"` // 0: anonymous, 1: login, 2: busi
 	Bgids      []int64 `json:"bgids"`
 	BuiltIn    int     `json:"built_in" column:"built_in"` // 0: false, 1: true
@@ -42,10 +42,6 @@ type Board struct {
 
 func (b *Board) GetTableName() string {
 	return BoardTableName
-}
-
-func (b *Board) DB2FE() error {
-	return nil
 }
 
 func (b *Board) Verify() error {
@@ -60,13 +56,17 @@ func (b *Board) Verify() error {
 	return nil
 }
 
-func (b *Board) Clone(operatorName string, newBgid int64) *Board {
+func (b *Board) Clone(operatorName string, newBgid int64, suffix string) *Board {
 	clone := &Board{
-		Name:     b.Name + " Cloned",
+		Name:     b.Name,
 		Tags:     b.Tags,
 		GroupId:  newBgid,
 		CreateBy: operatorName,
 		UpdateBy: operatorName,
+	}
+
+	if suffix != "" {
+		clone.Name = clone.Name + " " + suffix
 	}
 
 	if b.Ident != "" {
@@ -80,7 +80,6 @@ func (b *Board) CanRenameIdent(ctx *ctx.Context, ident string) (bool, error) {
 	if ident == "" {
 		return true, nil
 	}
-
 	finder := zorm.NewSelectFinder(BoardTableName, "count(*)").Append("WHERE ident=? and id <> ?", ident, b.Id)
 	cnt, err := Count(ctx, finder)
 	//cnt, err := Count(DB(ctx).Model(b).Where("ident=? and id <> ?", ident, b.Id))
@@ -98,9 +97,9 @@ func (b *Board) Add(ctx *ctx.Context) error {
 
 	if b.Ident != "" {
 		// ident duplicate check
+		//cnt, err := Count(DB(ctx).Model(b).Where("ident=?", b.Ident))
 		finder := zorm.NewSelectFinder(BoardTableName, "count(*)").Append("WHERE ident=? ", b.Ident)
 		cnt, err := Count(ctx, finder)
-		//cnt, err := Count(DB(ctx).Model(b).Where("ident=?", b.Ident))
 		if err != nil {
 			return err
 		}
@@ -108,6 +107,17 @@ func (b *Board) Add(ctx *ctx.Context) error {
 		if cnt > 0 {
 			return errors.New("Ident duplicate")
 		}
+	}
+
+	//cnt, err := Count(DB(ctx).Model(b).Where("name = ? and group_id = ?", b.Name, b.GroupId))
+	finder2 := zorm.NewSelectFinder(BoardTableName, "count(*)").Append("WHERE name = ? and group_id = ?", b.Name, b.GroupId)
+	cnt, err := Count(ctx, finder2)
+	if err != nil {
+		return err
+	}
+
+	if cnt > 0 {
+		return errors.New("Name duplicate")
 	}
 
 	now := time.Now().Unix()
@@ -134,7 +144,6 @@ func (b *Board) AtomicAdd(c *ctx.Context, payload string) error {
 	})
 
 	return err
-
 	/*
 		return DB(c).Transaction(func(tx *gorm.DB) error {
 			tCtx := &ctx.Context{
@@ -155,17 +164,20 @@ func (b *Board) AtomicAdd(c *ctx.Context, payload string) error {
 	*/
 }
 
-func (b *Board) Update(ctx *ctx.Context, selectField interface{}, selectFields ...string) error {
+func (b *Board) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
 	if err := b.Verify(); err != nil {
 		return err
 	}
-	return Update(ctx, b, selectFields)
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, b, cols)
 	//return DB(ctx).Model(b).Select(selectField, selectFields...).Updates(b).Error
 }
 
 func (b *Board) Del(ctx *ctx.Context) error {
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("id=?", b.Id).Delete(&BoardPayload{}).Error; err != nil {
 				return err
 			}
@@ -188,11 +200,11 @@ func (b *Board) Del(ctx *ctx.Context) error {
 
 	})
 	return err
-
 }
 
 func BoardGetByID(ctx *ctx.Context, id int64) (*Board, error) {
-	lst := make([]Board, 0)
+	//var lst []*Board
+	lst := make([]*Board, 0)
 	finder := zorm.NewSelectFinder(BoardTableName).Append("WHERE id = ?", id)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := DB(ctx).Where("id = ?", id).Find(&lst).Error
@@ -204,15 +216,16 @@ func BoardGetByID(ctx *ctx.Context, id int64) (*Board, error) {
 		return nil, nil
 	}
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 // BoardGet for detail page
 func BoardGet(ctx *ctx.Context, where string, args ...interface{}) (*Board, error) {
-	lst := make([]Board, 0)
+	lst := make([]*Board, 0)
 	finder := zorm.NewSelectFinder(BoardTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []*Board
 	//err := DB(ctx).Where(where, args...).Find(&lst).Error
 	if err != nil {
 		return nil, err
@@ -229,7 +242,7 @@ func BoardGet(ctx *ctx.Context, where string, args ...interface{}) (*Board, erro
 
 	lst[0].Configs = payload
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func BoardCount(ctx *ctx.Context, where string, args ...interface{}) (num int64, err error) {
@@ -263,36 +276,42 @@ func BoardGetsByGroupId(ctx *ctx.Context, groupId int64, query string) ([]Board,
 			}
 		}
 	}
+
 	finder.Append("order by name asc")
-	lst := make([]Board, 0)
-	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	objs := make([]Board, 0)
+	err := zorm.Query(ctx.Ctx, finder, &objs, nil)
 	//err := session.Find(&objs).Error
-	return lst, err
+	return objs, err
 }
 
 func BoardGetsByBGIds(ctx *ctx.Context, gids []int64, query string) ([]Board, error) {
-	//session := DB(ctx).Where("group_id in (?)", gids).Order("name")
+	//session := DB(ctx)
 	finder := zorm.NewSelectFinder(BoardTableName).Append("WHERE 1=1")
 	if len(gids) > 0 {
+		//session = session.Where("group_id in (?)", gids).Order("name")
 		finder.Append("and group_id in (?)", gids)
 	}
+
 	arr := strings.Fields(query)
 	if len(arr) > 0 {
 		for i := 0; i < len(arr); i++ {
 			if strings.HasPrefix(arr[i], "-") {
 				q := "%" + arr[i][1:] + "%"
+				//session = session.Where("name not like ? and tags not like ?", q, q)
 				finder.Append("and name not like ? and tags not like ?", q, q)
 			} else {
 				q := "%" + arr[i] + "%"
+				//session = session.Where("(name like ? or tags like ?)", q, q)
 				finder.Append("and (name like ? or tags like ?)", q, q)
 			}
 		}
 	}
+
 	finder.Append("order by name asc")
-	lst := make([]Board, 0)
-	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	objs := make([]Board, 0)
+	err := zorm.Query(ctx.Ctx, finder, &objs, nil)
 	//err := session.Find(&objs).Error
-	return lst, err
+	return objs, err
 }
 
 func BoardGets(ctx *ctx.Context, query, where string, args ...interface{}) ([]Board, error) {
@@ -319,15 +338,15 @@ func BoardGets(ctx *ctx.Context, query, where string, args ...interface{}) ([]Bo
 	}
 
 	finder.Append("order by name asc")
-	lst := make([]Board, 0)
-	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	objs := make([]Board, 0)
+	err := zorm.Query(ctx.Ctx, finder, &objs, nil)
 	//err := session.Find(&objs).Error
-	return lst, err
+	return objs, err
 }
 
 func BoardSetHide(ctx *ctx.Context, ids []int64) error {
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&Board{}).Where("built_in = 1").Update("hide", 0).Error; err != nil {
 				return err
 			}

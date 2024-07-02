@@ -1,17 +1,15 @@
 package router
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"github.com/ccfos/nightingale/v6/alert/aconf"
+	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/models"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
-	"github.com/ccfos/nightingale/v6/pkg/ibex"
-	"github.com/gin-gonic/gin"
 
+	"github.com/gin-gonic/gin"
 	"github.com/toolkits/pkg/ginx"
 )
 
@@ -19,26 +17,26 @@ const defaultLimit = 300
 
 func (rt *Router) statistic(c *gin.Context) {
 	name := ginx.QueryStr(c, "name")
-	var model string
+	var model zorm.IEntityStruct
 	var err error
 	var statistics *models.Statistics
 	switch name {
 	case "alert_mute":
-		model = models.AlertMuteTableName
+		model = &models.AlertMute{}
 	case "alert_rule":
-		model = models.AlertRuleTableName
+		model = &models.AlertRule{}
 	case "alert_subscribe":
-		model = models.AlertSubscribeTableName
+		model = &models.AlertSubscribe{}
 	case "busi_group":
-		model = models.BusiGroupTableName
+		model = &models.BusiGroup{}
 	case "recording_rule":
-		model = models.RecordingRuleTableName
+		model = &models.RecordingRule{}
 	case "target":
-		model = models.TargetTableName
+		model = &models.Target{}
 	case "user":
-		model = models.UserTableName
+		model = &models.User{}
 	case "user_group":
-		model = models.UserGroupTableName
+		model = &models.UserGroup{}
 	case "datasource":
 		// datasource update_at is different from others
 		statistics, err = models.DatasourceStatistics(rt.Ctx)
@@ -52,7 +50,7 @@ func (rt *Router) statistic(c *gin.Context) {
 		ginx.Bomb(http.StatusBadRequest, "invalid name")
 	}
 
-	statistics, err = models.StatisticsGet(rt.Ctx, model)
+	statistics, err = models.StatisticsGet(rt.Ctx, model.GetTableName())
 	ginx.NewRender(c).Data(statistics, err)
 }
 
@@ -133,31 +131,6 @@ type DoneIdsReply struct {
 type TaskCreateReply struct {
 	Err string `json:"err"`
 	Dat int64  `json:"dat"` // task.id
-}
-
-// return task.id, error
-func TaskCreate(v interface{}, ibexc aconf.Ibex) (int64, error) {
-	var res TaskCreateReply
-	err := ibex.New(
-		ibexc.Address,
-		ibexc.BasicAuthUser,
-		ibexc.BasicAuthPass,
-		ibexc.Timeout,
-	).
-		Path("/ibex/v1/tasks").
-		In(v).
-		Out(&res).
-		POST()
-
-	if err != nil {
-		return 0, err
-	}
-
-	if res.Err != "" {
-		return 0, fmt.Errorf("response.err: %v", res.Err)
-	}
-
-	return res.Dat, nil
 }
 
 func Username(c *gin.Context) string {

@@ -61,7 +61,7 @@ type Processor struct {
 	targetNote string
 	groupName  string
 
-	atertRuleCache          *memsto.AlertRuleCacheType
+	alertRuleCache          *memsto.AlertRuleCacheType
 	TargetCache             *memsto.TargetCacheType
 	TargetsOfAlertRuleCache *memsto.TargetsOfAlertRuleCacheType
 	BusiGroupCache          *memsto.BusiGroupCacheType
@@ -93,7 +93,7 @@ func (p *Processor) Hash() string {
 	))
 }
 
-func NewProcessor(engineName string, rule *models.AlertRule, datasourceId int64, atertRuleCache *memsto.AlertRuleCacheType,
+func NewProcessor(engineName string, rule *models.AlertRule, datasourceId int64, alertRuleCache *memsto.AlertRuleCacheType,
 	targetCache *memsto.TargetCacheType, targetsOfAlertRuleCache *memsto.TargetsOfAlertRuleCacheType,
 	busiGroupCache *memsto.BusiGroupCacheType, alertMuteCache *memsto.AlertMuteCacheType, datasourceCache *memsto.DatasourceCacheType, ctx *ctx.Context,
 	stats *astats.Stats) *Processor {
@@ -107,7 +107,7 @@ func NewProcessor(engineName string, rule *models.AlertRule, datasourceId int64,
 		TargetsOfAlertRuleCache: targetsOfAlertRuleCache,
 		BusiGroupCache:          busiGroupCache,
 		alertMuteCache:          alertMuteCache,
-		atertRuleCache:          atertRuleCache,
+		alertRuleCache:          alertRuleCache,
 		datasourceCache:         datasourceCache,
 
 		ctx:   ctx,
@@ -127,7 +127,7 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 	// 这些信息的修改是不会引起worker restart的，但是确实会影响告警处理逻辑
 	// 所以，这里直接从memsto.AlertRuleCache中获取并覆盖
 	p.inhibit = inhibit
-	cachedRule := p.atertRuleCache.Get(p.rule.Id)
+	cachedRule := p.alertRuleCache.Get(p.rule.Id)
 	if cachedRule == nil {
 		logger.Errorf("rule not found %+v", anomalyPoints)
 		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "handle_event").Inc()
@@ -145,9 +145,10 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 		// 如果 event 被 mute 了,本质也是 fire 的状态,这里无论如何都添加到 alertingKeys 中,防止 fire 的事件自动恢复了
 		hash := event.Hash
 		alertingKeys[hash] = struct{}{}
-		if mute.IsMuted(cachedRule, event, p.TargetCache, p.alertMuteCache) {
+		isMuted, detail := mute.IsMuted(cachedRule, event, p.TargetCache, p.alertMuteCache)
+		if isMuted {
 			p.Stats.CounterMuteTotal.WithLabelValues(event.GroupName).Inc()
-			logger.Debugf("rule_eval:%s event:%v is muted", p.Key(), event)
+			logger.Debugf("rule_eval:%s event:%v is muted, detail:%s", p.Key(), event, detail)
 			continue
 		}
 
@@ -165,9 +166,7 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 		p.handleEvent(events)
 	}
 
-	if cachedRule.Cate == models.PROMETHEUS && !strings.Contains(cachedRule.RuleConfig, "triggers") {
-		p.HandleRecover(alertingKeys, now)
-	}
+	p.HandleRecover(alertingKeys, now, inhibit)
 }
 
 func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, now int64) *models.AlertCurEvent {
@@ -209,6 +208,11 @@ func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, no
 	event.ExtraConfig = p.rule.ExtraConfigJSON
 	event.PromQl = anomalyPoint.Query
 
+	if event.TriggerValues != "" && strings.Count(event.TriggerValues, "$") > 1 {
+		// TriggerValues 有多个变量，将多个变量都放到 TriggerValue 中
+		event.TriggerValue = event.TriggerValues
+	}
+
 	if from == "inner" {
 		event.LastEvalTime = now
 	} else {
@@ -217,7 +221,7 @@ func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, no
 	return event
 }
 
-func (p *Processor) HandleRecover(alertingKeys map[string]struct{}, now int64) {
+func (p *Processor) HandleRecover(alertingKeys map[string]struct{}, now int64, inhibit bool) {
 	for _, hash := range p.pendings.Keys() {
 		if _, has := alertingKeys[hash]; has {
 			continue
@@ -225,11 +229,54 @@ func (p *Processor) HandleRecover(alertingKeys map[string]struct{}, now int64) {
 		p.pendings.Delete(hash)
 	}
 
+	hashArr := make([]string, 0, len(alertingKeys))
 	for hash := range p.fires.GetAll() {
 		if _, has := alertingKeys[hash]; has {
 			continue
 		}
-		p.RecoverSingle(hash, now, nil)
+
+		hashArr = append(hashArr, hash)
+	}
+	p.HandleRecoverEvent(hashArr, now, inhibit)
+
+}
+
+func (p *Processor) HandleRecoverEvent(hashArr []string, now int64, inhibit bool) {
+	cachedRule := p.rule
+	if cachedRule == nil {
+		return
+	}
+
+	if !inhibit {
+		for _, hash := range hashArr {
+			p.RecoverSingle(hash, now, nil)
+		}
+		return
+	}
+
+	eventMap := make(map[string]models.AlertCurEvent)
+	for _, hash := range hashArr {
+		event, has := p.fires.Get(hash)
+		if !has {
+			continue
+		}
+
+		e, exists := eventMap[event.Tags]
+		if !exists {
+			eventMap[event.Tags] = *event
+			continue
+		}
+
+		if e.Severity > event.Severity {
+			// hash 对应的恢复事件的被抑制了，把之前的事件删除
+			p.fires.Delete(e.Hash)
+			p.pendings.Delete(e.Hash)
+			eventMap[event.Tags] = *event
+		}
+	}
+
+	for _, event := range eventMap {
+		p.RecoverSingle(event.Hash, now, nil)
 	}
 }
 
@@ -472,6 +519,11 @@ func (p *Processor) mayHandleGroup() {
 	if bg != nil {
 		p.groupName = bg.Name
 	}
+}
+
+func (p *Processor) DeleteProcessEvent(hash string) {
+	p.fires.Delete(hash)
+	p.pendings.Delete(hash)
 }
 
 func labelMapToArr(m map[string]string) []string {

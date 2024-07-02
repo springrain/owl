@@ -3,21 +3,23 @@ package router
 import (
 	"compress/gzip"
 	"compress/zlib"
-	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	easyjson "github.com/mailru/easyjson"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/prompb"
 )
 
+//easyjson:json
 type TimeSeries struct {
 	Series []*DatadogMetric `json:"series"`
 }
 
+//easyjson:json
 type DatadogMetric struct {
 	Metric string         `json:"metric"`
 	Points []DatadogPoint `json:"points"`
@@ -25,6 +27,7 @@ type DatadogMetric struct {
 	Tags   []string       `json:"tags,omitempty"`
 }
 
+//easyjson:json
 type DatadogPoint [2]float64
 
 func (m *DatadogMetric) Clean() error {
@@ -161,17 +164,17 @@ func readDatadogBody(c *gin.Context) ([]byte, error) {
 			return nil, e
 		}
 		defer r.Close()
-		bs, err = io.ReadAll(r)
+		bs, err = ioutil.ReadAll(r)
 	} else if enc == "deflate" {
 		r, e := zlib.NewReader(c.Request.Body)
 		if e != nil {
 			return nil, e
 		}
 		defer r.Close()
-		bs, err = io.ReadAll(r)
+		bs, err = ioutil.ReadAll(r)
 	} else {
 		defer c.Request.Body.Close()
-		bs, err = io.ReadAll(c.Request.Body)
+		bs, err = ioutil.ReadAll(c.Request.Body)
 	}
 
 	return bs, err
@@ -205,7 +208,7 @@ func (r *Router) datadogSeries(c *gin.Context) {
 	}
 
 	var series TimeSeries
-	err = json.Unmarshal(bs, &series)
+	err = easyjson.Unmarshal(bs, &series)
 	if err != nil {
 		c.String(400, err.Error())
 		return

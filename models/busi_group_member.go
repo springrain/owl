@@ -20,10 +20,6 @@ func (bg *BusiGroupMember) GetTableName() string {
 	return BusiGroupMemberTableName
 }
 
-func (bgm *BusiGroupMember) DB2FE() error {
-	return nil
-}
-
 func BusiGroupIds(ctx *ctx.Context, userGroupIds []int64, permFlag ...string) ([]int64, error) {
 	if len(userGroupIds) == 0 {
 		return []int64{}, nil
@@ -83,7 +79,6 @@ func BusiGroupMemberAdd(ctx *ctx.Context, member BusiGroupMember) error {
 		if obj.PermFlag == member.PermFlag {
 			return nil
 		}
-
 		finder := zorm.NewUpdateFinder(BusiGroupMemberTableName).Append("perm_flag=? WHERE busi_group_id = ? and user_group_id = ?", member.PermFlag, member.BusiGroupId, member.UserGroupId)
 		return UpdateFinder(ctx, finder)
 		//return DB(ctx).Model(&BusiGroupMember{}).Where("busi_group_id = ? and user_group_id = ?", member.BusiGroupId, member.UserGroupId).Update("perm_flag", member.PermFlag).Error
@@ -91,11 +86,10 @@ func BusiGroupMemberAdd(ctx *ctx.Context, member BusiGroupMember) error {
 }
 
 func BusiGroupMemberGet(ctx *ctx.Context, where string, args ...interface{}) (*BusiGroupMember, error) {
-	lst := make([]BusiGroupMember, 0)
+	lst := make([]*BusiGroupMember, 0)
 	finder := zorm.NewSelectFinder(BusiGroupMemberTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
-	//err := DB(ctx).Where(where, args...).Find(&lst).Error
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +98,7 @@ func BusiGroupMemberGet(ctx *ctx.Context, where string, args ...interface{}) (*B
 		return nil, nil
 	}
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func BusiGroupMemberDel(ctx *ctx.Context, where string, args ...interface{}) error {
@@ -118,6 +112,7 @@ func BusiGroupMemberGets(ctx *ctx.Context, where string, args ...interface{}) ([
 	lst := make([]BusiGroupMember, 0)
 	finder := zorm.NewSelectFinder(BusiGroupMemberTableName).Append("WHERE "+where+" order by perm_flag asc", args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []BusiGroupMember
 	//err := DB(ctx).Where(where, args...).Order("perm_flag").Find(&lst).Error
 	return lst, err
 }

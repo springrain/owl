@@ -12,7 +12,6 @@ import (
 const AlertingEnginesTableName = "alerting_engines"
 
 type AlertingEngines struct {
-	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id            int64  `json:"id" column:"id"`
 	Instance      string `json:"instance" column:"instance"`
@@ -39,7 +38,9 @@ func (e *AlertingEngines) UpdateDatasourceId(ctx *ctx.Context, id int64) error {
 	}
 
 	e.DatasourceId = id
-	return UpdateColumn(ctx, AlertingEnginesTableName, e.Id, "datasource_id", e.DatasourceId)
+	cols := make([]string, 0)
+	cols = append(cols, "datasource_id")
+	return Update(ctx, e, cols)
 	//return DB(ctx).Model(e).Select("datasource_id").Updates(e).Error
 }
 
@@ -60,7 +61,6 @@ func AlertingEngineAdd(ctx *ctx.Context, instance string, datasourceId int64) er
 		DatasourceId: datasourceId,
 		Clock:        time.Now().Unix(),
 	})
-
 	/*
 		err = DB(ctx).Create(&AlertingEngines{
 			Instance:     instance,
@@ -77,7 +77,6 @@ func AlertingEngineDel(ctx *ctx.Context, ids []int64) error {
 	}
 	finder := zorm.NewDeleteFinder(AlertingEnginesTableName).Append("WHERE id in (?)", ids)
 	return UpdateFinder(ctx, finder)
-
 	//return DB(ctx).Where("id in ?", ids).Delete(new(AlertingEngines)).Error
 }
 
@@ -87,6 +86,7 @@ func AlertingEngineGetDatasourceIds(ctx *ctx.Context, instance string) ([]int64,
 	err := zorm.Query(ctx.Ctx, finder, &ids, nil)
 	return ids, err
 	/*
+		var objs []AlertingEngines
 		err := DB(ctx).Where("instance=?", instance).Find(&objs).Error
 		if err != nil {
 			return []int64{}, err
@@ -111,7 +111,10 @@ func AlertingEngineGets(ctx *ctx.Context, where string, args ...interface{}) ([]
 	AppendWhere(finder, where, args...)
 	finder.Append("order by instance asc")
 	err := zorm.Query(ctx.Ctx, finder, &objs, nil)
+
 	/*
+		var objs []*AlertingEngines
+		var err error
 		session := DB(ctx).Order("instance")
 		if where == "" {
 			err = session.Find(&objs).Error
@@ -144,6 +147,8 @@ func AlertingEngineGetsClusters(ctx *ctx.Context, where string, args ...interfac
 	finder.Append("order by engine_cluster asc")
 	err := zorm.Query(ctx.Ctx, finder, &arr, nil)
 	/*
+		var arr []string
+		var err error
 		session := DB(ctx).Model(new(AlertingEngines)).Where("engine_cluster != ''").Order("engine_cluster").Distinct("engine_cluster")
 		if where == "" {
 			err = session.Pluck("engine_cluster", &arr).Error
@@ -161,6 +166,8 @@ func AlertingEngineGetsInstances(ctx *ctx.Context, where string, args ...interfa
 	finder.Append("order by instance asc")
 	err := zorm.Query(ctx.Ctx, finder, &arr, nil)
 	/*
+		var arr []string
+		var err error
 		session := DB(ctx).Model(new(AlertingEngines)).Order("instance")
 		if where == "" {
 			err = session.Pluck("instance", &arr).Error

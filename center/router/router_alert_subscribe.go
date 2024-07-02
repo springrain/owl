@@ -31,14 +31,23 @@ func (rt *Router) alertSubscribeGets(c *gin.Context) {
 }
 
 func (rt *Router) alertSubscribeGetsByGids(c *gin.Context) {
-	gids := str.IdsInt64(ginx.QueryStr(c, "gids"), ",")
-	if len(gids) == 0 {
-		ginx.NewRender(c, http.StatusBadRequest).Message("arg(gids) is empty")
-		return
-	}
+	gids := str.IdsInt64(ginx.QueryStr(c, "gids", ""), ",")
+	if len(gids) > 0 {
+		for _, gid := range gids {
+			rt.bgroCheck(c, gid)
+		}
+	} else {
+		me := c.MustGet("user").(*models.User)
+		if !me.IsAdmin() {
+			var err error
+			gids, err = models.MyBusiGroupIds(rt.Ctx, me.Id)
+			ginx.Dangerous(err)
 
-	for _, gid := range gids {
-		rt.bgroCheck(c, gid)
+			if len(gids) == 0 {
+				ginx.NewRender(c).Data([]int{}, nil)
+				return
+			}
+		}
 	}
 
 	lst, err := models.AlertSubscribeGetsByBGIds(rt.Ctx, gids)

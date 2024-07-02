@@ -94,7 +94,9 @@ func (ds *Datasource) Update(ctx *ctx.Context, selectFields ...string) error {
 	if err := ds.Verify(); err != nil {
 		return err
 	}
-	ds.UpdatedAt = time.Now().Unix()
+	if ds.UpdatedAt == 0 {
+		ds.UpdatedAt = time.Now().Unix()
+	}
 	return Update(ctx, ds, selectFields)
 	//return DB(ctx).Model(ds).Select(selectField, selectFields...).Updates(ds).Error
 }
@@ -379,20 +381,22 @@ func DatasourceStatistics(ctx *ctx.Context) (*Statistics, error) {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=datasource")
 		return s, err
 	}
-	var stats Statistics
-	finder := zorm.NewSelectFinder(DatasourceTableName, "count(*) as Total , max(updated_at) as LastUpdated")
-	_, err := zorm.QueryRow(ctx.Ctx, finder, &stats)
-	return &stats, err
+	//return StatisticsGet(ctx, DatasourceTableName)
+	finder := zorm.NewSelectFinder(DatasourceTableName, "count(*) as Total,max(updated_at) as LastUpdated")
+	stats := make([]*Statistics, 0)
+	err := zorm.Query(ctx.Ctx, finder, &stats, nil)
+
 	//return StatisticsGet(ctx, DatasourceTableName)
 	/*
 		session := DB(ctx).Model(&Datasource{}).Select("count(*) as total", "max(updated_at) as last_updated")
 
 		var stats []*Statistics
 		err := session.Find(&stats).Error
-		if err != nil {
-			return nil, err
-		}
-
-		return stats[0], nil
 	*/
+	if err != nil {
+		return nil, err
+	}
+
+	return stats[0], nil
+
 }

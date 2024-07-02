@@ -12,8 +12,7 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 
-	"errors"
-
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 	"github.com/toolkits/pkg/str"
 )
@@ -36,7 +35,7 @@ type AlertRule struct {
 	Cate                  string            `json:"cate" column:"cate"`                             // alert rule cate (prometheus|elasticsearch)
 	DatasourceIds         string            `json:"-" column:"datasource_ids"`                      // datasource ids
 	DatasourceIdsJson     []int64           `json:"datasource_ids"`                                 // for fe
-	Cluster               string            `json:"cluster" column:"cluster_name"`                  // take effect by clusters, seperated by space
+	Cluster               string            `json:"cluster" column:"cluster"`                       // take effect by clusters, seperated by space
 	Name                  string            `json:"name" column:"name"`                             // rule name
 	Note                  string            `json:"note" column:"note"`                             // will sent in notify
 	Prod                  string            `json:"prod" column:"prod"`                             // product empty means n9e
@@ -84,6 +83,7 @@ type AlertRule struct {
 	CreateBy              string            `json:"create_by" column:"create_by"`
 	UpdateAt              int64             `json:"update_at" column:"update_at"`
 	UpdateBy              string            `json:"update_by" column:"update_by"`
+	UUID                  int64             `json:"uuid"` // tpl identifier
 }
 
 type PromRuleConfig struct {
@@ -213,7 +213,7 @@ func Str2Int(arr []string) []int64 {
 }
 
 func (ar *AlertRule) GetTableName() string {
-	return AlertRuleTableName
+	return "alert_rule"
 }
 
 func (ar *AlertRule) Verify() error {
@@ -429,6 +429,7 @@ func (ar *AlertRule) UpdateColumn(ctx *ctx.Context, column string, value interfa
 		if err != nil {
 			return err
 		}
+
 		return UpdateColumn(ctx, AlertRuleTableName, ar.Id, "annotations", string(b))
 		//return DB(ctx).Model(ar).UpdateColumn("annotations", string(b)).Error
 	}
@@ -522,7 +523,6 @@ func (ar *AlertRule) FillNotifyGroups(ctx *ctx.Context, cache map[int64]*UserGro
 		// some user-group already deleted
 		ar.NotifyGroupsJSON = exists
 		ar.NotifyGroups = strings.Join(exists, " ")
-
 		UpdateColumn(ctx, AlertRuleTableName, ar.Id, "notify_groups", ar.NotifyGroups)
 		//DB(ctx).Model(ar).Update("notify_groups", ar.NotifyGroups)
 	}
@@ -663,8 +663,17 @@ func AlertRuleDels(ctx *ctx.Context, ids []int64, bgid ...int64) error {
 			}
 			return rowsAffected, err
 		})
-		//ret := session.Delete(&AlertRule{})
+		/*
+			ret := session.Delete(&AlertRule{})
+			if ret.Error != nil {
+				return ret.Error
+			}
 
+			// 说明确实删掉了，把相关的活跃告警也删了，这些告警永远都不会恢复了，而且策略都没了，说明没人关心了
+			if ret.RowsAffected > 0 {
+				DB(ctx).Where("rule_id = ?", ids[i]).Delete(new(AlertCurEvent))
+			}
+		*/
 	}
 
 	return nil
@@ -675,6 +684,7 @@ func AlertRuleExists(ctx *ctx.Context, id, groupId int64, datasourceIds []int64,
 	//session := DB(ctx).Where("id <> ? and group_id = ? and name = ?", id, groupId, name)
 	lst := make([]AlertRule, 0)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []AlertRule
 	//err := session.Find(&lst).Error
 	if err != nil {
 		return false, err
@@ -698,9 +708,9 @@ func AlertRuleExists(ctx *ctx.Context, id, groupId int64, datasourceIds []int64,
 func AlertRuleGets(ctx *ctx.Context, groupId int64) ([]AlertRule, error) {
 	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE group_id=? order by name asc ", groupId)
 	//session := DB(ctx).Where("group_id=?", groupId).Order("name")
-
 	lst := make([]AlertRule, 0)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []AlertRule
 	//err := session.Find(&lst).Error
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
@@ -712,6 +722,7 @@ func AlertRuleGets(ctx *ctx.Context, groupId int64) ([]AlertRule, error) {
 }
 
 func AlertRuleGetsByBGIds(ctx *ctx.Context, bgids []int64) ([]AlertRule, error) {
+
 	//session := DB(ctx).Where("group_id in (?)", bgids).Order("name")
 	finder := zorm.NewSelectFinder(AlertRuleTableName)
 	if len(bgids) > 0 {
@@ -719,7 +730,14 @@ func AlertRuleGetsByBGIds(ctx *ctx.Context, bgids []int64) ([]AlertRule, error) 
 	}
 	lst := make([]AlertRule, 0)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
-	//err := session.Find(&lst).Error
+	/*
+		session := DB(ctx)
+		if len(bgids) > 0 {
+			session = session.Where("group_id in (?)", bgids).Order("name")
+		}
+		var lst []AlertRule
+		err := session.Find(&lst).Error
+	*/
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
 			lst[i].DB2FE()
@@ -761,7 +779,6 @@ func AlertRuleGetsAll(ctx *ctx.Context) ([]*AlertRule, error) {
 }
 
 func AlertRulesGetsBy(ctx *ctx.Context, prods []string, query, algorithm, cluster string, cates []string, disabled int) ([]*AlertRule, error) {
-
 	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE 1=1")
 	//session := DB(ctx)
 
@@ -786,7 +803,7 @@ func AlertRulesGetsBy(ctx *ctx.Context, prods []string, query, algorithm, cluste
 
 	if cluster != "" {
 		//session = session.Where("cluster like ?", "%"+cluster+"%")
-		finder.Append("and cluster_name like ?", "%"+cluster+"%")
+		finder.Append("and cluster like ?", "%"+cluster+"%")
 	}
 
 	if len(cates) != 0 {
@@ -834,20 +851,6 @@ func AlertRuleGetById(ctx *ctx.Context, id int64) (*AlertRule, error) {
 	return AlertRuleGet(ctx, "id=?", id)
 }
 
-func AlertRuleGetName(ctx *ctx.Context, id int64) (string, error) {
-	var names []string
-	finder := zorm.NewSelectFinder(AlertRuleTableName, "name").Append("WHERE id = ?", id)
-	err := zorm.Query(ctx.Ctx, finder, &names, nil)
-	//err := DB(ctx).Model(new(AlertRule)).Where("id = ?", id).Pluck("name", &names).Error
-	if err != nil {
-		return "", err
-	}
-
-	if len(names) == 0 {
-		return "", nil
-	}
-	return names[0], nil
-}
 func AlertRuleGetsByIds(ctx *ctx.Context, ids []int64) ([]AlertRule, error) {
 	lst := make([]AlertRule, 0, len(ids))
 	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE id in (?)", ids)
@@ -866,16 +869,22 @@ func AlertRuleStatistics(ctx *ctx.Context) (*Statistics, error) {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=alert_rule")
 		return s, err
 	}
-
 	finder := zorm.NewSelectFinder(AlertRuleTableName, "count(*) as Total , max(update_at) as LastUpdated").Append("WHERE disabled = ?", 0)
 	//session := DB(ctx).Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ?", 0)
-	stats := make([]Statistics, 0)
+	stats := make([]*Statistics, 0)
 	err := zorm.Query(ctx.Ctx, finder, &stats, nil)
-	//err := session.Find(&stats).Error
+
+	/*
+		session := DB(ctx).Model(&AlertRule{}).Select("count(*) as total", "max(update_at) as last_updated").Where("disabled = ?", 0)
+		var stats []*Statistics
+		err := session.Find(&stats).Error
+	*/
+
 	if err != nil {
 		return nil, err
 	}
-	return &stats[0], nil
+
+	return stats[0], nil
 }
 
 func (ar *AlertRule) IsPrometheusRule() bool {
@@ -935,9 +944,10 @@ func (ar *AlertRule) UpdateEvent(event *AlertCurEvent) {
 }
 
 func AlertRuleUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error {
-	lst := make([]AlertRule, 0)
+	lst := make([]*AlertRule, 0)
 	finder := zorm.NewSelectFinder(AlertRuleTableName)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []*AlertRule
 	//err := DB(ctx).Find(&lst).Error
 	if err != nil {
 		return err
@@ -1037,10 +1047,10 @@ func GetTargetsOfHostAlertRule(ctx *ctx.Context, engineName string) (map[string]
 		}
 
 		query := GetHostsQuery(rule.Queries)
-		finder, _ := TargetFilterQueryBuild(ctx, "*", query, 0, 0)
-		var lst = make([]*Target, 0)
+		finder, page := TargetFilterQueryBuild(ctx, "*", query, 0, 0)
+		lst := make([]*Target, 0)
+		err := zorm.Query(ctx.Ctx, finder, &lst, page)
 		//err := session.Find(&lst).Error
-		err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 		if err != nil {
 			logger.Errorf("failed to query targets: %v", err)
 			continue

@@ -10,6 +10,8 @@ import (
 	"github.com/ccfos/nightingale/v6/models"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/flashduty"
+
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 )
 
@@ -22,8 +24,7 @@ type UserCacheType struct {
 	stats              *Stats
 
 	sync.RWMutex
-	users     map[int64]*models.User // key: id
-	dutyUsers map[int64]*models.User // key: id
+	users map[int64]*models.User // key: id
 }
 
 func NewUserCache(ctx *ctx.Context, stats *Stats) *UserCacheType {
@@ -128,6 +129,7 @@ func (uc *UserCacheType) SyncUsers() {
 	}
 
 	go uc.loopSyncUsers()
+	go uc.loopUpdateLastActiveTime()
 }
 
 func (uc *UserCacheType) loopSyncUsers() {
@@ -146,13 +148,13 @@ func (uc *UserCacheType) syncUsers() error {
 	stat, err := models.UserStatistics(uc.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("users", start.Unix(), -1, -1, "failed to query statistics: "+err.Error())
-		return fmt.Errorf("failed to exec UserStatistics:%w", err)
+		return errors.WithMessage(err, "failed to exec UserStatistics")
 	}
 
 	configsStat, err := models.ConfigsUserVariableStatistics(uc.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("user_variables", start.Unix(), -1, -1, "failed to query statistics: "+err.Error())
-		return fmt.Errorf("failed to exec ConfigsUserVariableStatistics:%w", err)
+		return errors.WithMessage(err, "failed to exec ConfigsUserVariableStatistics")
 	}
 
 	if !uc.StatChanged(stat.Total, stat.LastUpdated, configsStat.Total, configsStat.LastUpdated) {
@@ -165,7 +167,7 @@ func (uc *UserCacheType) syncUsers() error {
 	lst, err := models.UserGetAll(uc.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("users", start.Unix(), -1, -1, "failed to query records: "+err.Error())
-		return fmt.Errorf("failed to exec UserGetAll:%w", err)
+		return errors.WithMessage(err, "failed to exec UserGetAll")
 	}
 
 	m := make(map[int64]*models.User)
@@ -175,12 +177,13 @@ func (uc *UserCacheType) syncUsers() error {
 	uc.Set(m, stat.Total, stat.LastUpdated, configsStat.Total, configsStat.LastUpdated)
 
 	if flashduty.NeedSyncUser(uc.ctx) {
-		if err := flashduty.SyncUsersChange(uc.ctx, lst, uc.dutyUsers); err != nil {
-			logger.Warning("failed to sync users to flashduty:", err)
-			dumper.PutSyncRecord("users", start.Unix(), -1, -1, "failed to sync to flashduty: "+err.Error())
-		} else {
-			uc.dutyUsers = m
-		}
+		go func() {
+			err := flashduty.SyncUsersChange(uc.ctx, lst)
+			if err != nil {
+				logger.Warning("failed to sync users to flashduty:", err)
+				dumper.PutSyncRecord("users", start.Unix(), -1, -1, "failed to sync to flashduty: "+err.Error())
+			}
+		}()
 	}
 
 	ms := time.Since(start).Milliseconds()
@@ -189,6 +192,59 @@ func (uc *UserCacheType) syncUsers() error {
 
 	logger.Infof("timer: sync users done, cost: %dms, number: %d", ms, len(m))
 	dumper.PutSyncRecord("users", start.Unix(), ms, len(m), "success")
+
+	return nil
+}
+
+func (uc *UserCacheType) SetLastActiveTime(userId int64, lastActiveTime int64) {
+	uc.Lock()
+	defer uc.Unlock()
+	if user, exists := uc.users[userId]; exists {
+		user.LastActiveTime = lastActiveTime
+	}
+}
+
+func (uc *UserCacheType) loopUpdateLastActiveTime() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("panic to loopUpdateLastActiveTime(), err: %v", r)
+		}
+	}()
+
+	// Sync every five minutes
+	duration := 5 * time.Minute
+	for {
+		time.Sleep(duration)
+		if err := uc.UpdateUsersLastActiveTime(); err != nil {
+			logger.Warningf("failed to update users' last active time: %v", err)
+		}
+	}
+}
+
+func (uc *UserCacheType) UpdateUsersLastActiveTime() error {
+	// read the full list of users from the database
+	users, err := models.UserGetAll(uc.ctx)
+	if err != nil {
+		return errors.WithMessage(err, "failed to get all users from database")
+	}
+
+	for _, dbUser := range users {
+		cacheUser := uc.GetByUserId(dbUser.Id)
+
+		if cacheUser == nil {
+			continue
+		}
+
+		if dbUser.LastActiveTime >= cacheUser.LastActiveTime {
+			continue
+		}
+
+		err = models.UpdateUserLastActiveTime(uc.ctx, cacheUser.Id, cacheUser.LastActiveTime)
+		if err != nil {
+			logger.Warningf("failed to update last active time for user %d: %v", cacheUser.Id, err)
+			return err
+		}
+	}
 
 	return nil
 }

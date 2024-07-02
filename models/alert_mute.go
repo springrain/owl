@@ -14,7 +14,7 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 	"github.com/toolkits/pkg/logger"
 
-	"errors"
+	"github.com/pkg/errors"
 )
 
 type TagFilter struct {
@@ -64,9 +64,9 @@ type AlertMute struct {
 	Note              string         `json:"note" column:"note"`
 	Cate              string         `json:"cate" column:"cate"`
 	Prod              string         `json:"prod" column:"prod"`
-	DatasourceIds     string         `json:"-" column:"datasource_ids"`     // datasource ids
-	DatasourceIdsJson []int64        `json:"datasource_ids"`                // for fe
-	Cluster           string         `json:"cluster" column:"cluster_name"` // take effect by clusters, seperated by space
+	DatasourceIds     string         `json:"-" column:"datasource_ids"` // datasource ids
+	DatasourceIdsJson []int64        `json:"datasource_ids"`            // for fe
+	Cluster           string         `json:"cluster" column:"cluster"`  // take effect by clusters, seperated by space
 	Tags              ormx.JSONArr   `json:"tags" column:"tags"`
 	Cause             string         `json:"cause" column:"cause"`
 	Btime             int64          `json:"btime" column:"btime"`
@@ -99,10 +99,11 @@ func AlertMuteGetById(ctx *ctx.Context, id int64) (*AlertMute, error) {
 }
 
 func AlertMuteGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertMute, error) {
-	lst := make([]AlertMute, 0)
+	lst := make([]*AlertMute, 0)
 	finder := zorm.NewSelectFinder(AlertMuteTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []*AlertMute
 	//err := DB(ctx).Where(where, args...).Find(&lst).Error
 	if err != nil {
 		return nil, err
@@ -112,7 +113,7 @@ func AlertMuteGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertMu
 		return nil, nil
 	}
 	err = lst[0].DB2FE()
-	return &lst[0], err
+	return lst[0], err
 }
 
 func AlertMuteGets(ctx *ctx.Context, prods []string, bgid int64, query string) ([]AlertMute, error) {
@@ -120,14 +121,15 @@ func AlertMuteGets(ctx *ctx.Context, prods []string, bgid int64, query string) (
 
 	//session := DB(ctx)
 	finder := zorm.NewSelectFinder(AlertMuteTableName).Append("WHERE 1=1")
+
 	if bgid != -1 {
-		//session = session.Where("group_id = ?", bgid)
 		finder.Append("and group_id = ?", bgid)
+		//session = session.Where("group_id = ?", bgid)
 	}
 
 	if len(prods) > 0 {
-		//session = session.Where("prod in (?)", prods)
 		finder.Append("and prod in (?)", prods)
+		//session = session.Where("prod in (?)", prods)
 	}
 
 	if query != "" {
@@ -158,16 +160,21 @@ func AlertMuteGetsByBG(ctx *ctx.Context, groupId int64) ([]AlertMute, error) {
 	return lst, err
 }
 
-func AlertMuteGetsByBGIds(ctx *ctx.Context, bgIds []int64) (lst []AlertMute, err error) {
-	//err = DB(ctx).Where("group_id in (?)", bgIds).Order("id desc").Find(&lst).Error
-
-	finder := zorm.NewSelectFinder(AlertMuteTableName).Append("WHERE group_id in (?) order by id desc", bgIds)
-	err = zorm.Query(ctx.Ctx, finder, &lst, nil)
-
+func AlertMuteGetsByBGIds(ctx *ctx.Context, bgids []int64) ([]AlertMute, error) {
+	lst := make([]AlertMute, 0)
+	finder := zorm.NewSelectFinder(AlertMuteTableName)
+	//session := DB(ctx)
+	if len(bgids) > 0 {
+		//session = session.Where("group_id in (?)", bgids)
+		finder.Append("WHERE group_id in (?)", bgids)
+	}
+	finder.Append("order by id desc")
+	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//err = session.Order("id desc").Find(&lst).Error
 	for i := 0; i < len(lst); i++ {
 		lst[i].DB2FE()
 	}
-	return
+	return lst, err
 }
 
 func (m *AlertMute) Verify() error {
@@ -185,10 +192,6 @@ func (m *AlertMute) Verify() error {
 
 	if err := m.Parse(); err != nil {
 		return err
-	}
-
-	if len(m.ITags) == 0 {
-		return errors.New("tags is blank")
 	}
 
 	return nil
@@ -235,10 +238,12 @@ func (m *AlertMute) Update(ctx *ctx.Context, arm AlertMute) error {
 	if err := arm.FE2DB(); err != nil {
 		return err
 	}
+
 	_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
 		return zorm.UpdateNotZeroValue(ctx, &arm)
 	})
 	return err
+
 	//return DB(ctx).Model(m).Select("*").Updates(arm).Error
 }
 
@@ -271,6 +276,11 @@ func (m *AlertMute) DB2FE() error {
 	if err != nil {
 		return err
 	}
+
+	if m.DatasourceIdsJson == nil {
+		m.DatasourceIdsJson = []int64{}
+	}
+
 	err = json.Unmarshal([]byte(m.PeriodicMutes), &m.PeriodicMutesJson)
 	if err != nil {
 		return err
@@ -301,7 +311,7 @@ func AlertMuteDel(ctx *ctx.Context, ids []int64) error {
 }
 
 func AlertMuteStatistics(ctx *ctx.Context) (*Statistics, error) {
-	//stats := make([]Statistics, 0)
+	//var stats []*Statistics
 	if !ctx.IsCenter {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=alert_mute")
 		return s, err
@@ -315,13 +325,15 @@ func AlertMuteStatistics(ctx *ctx.Context) (*Statistics, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return StatisticsGet(ctx, AlertMuteTableName)
 	/*
-			session := DB(ctx).Model(&AlertMute{}).Select("count(*) as Total", "max(update_at) as last_updated")
-			err = session.Find(&stats).Error
-			if err != nil {
-				return nil, err
-			}
+		session := DB(ctx).Model(&AlertMute{}).Select("count(*) as total", "max(update_at) as last_updated")
+
+		err = session.Find(&stats).Error
+		if err != nil {
+			return nil, err
+		}
 
 		return stats[0], nil
 	*/
@@ -329,6 +341,7 @@ func AlertMuteStatistics(ctx *ctx.Context) (*Statistics, error) {
 
 func AlertMuteGetsAll(ctx *ctx.Context) ([]*AlertMute, error) {
 	// get my cluster's mutes
+	//var lst []*AlertMute
 	lst := make([]*AlertMute, 0)
 	if !ctx.IsCenter {
 		lst, err := poster.GetByUrls[[]*AlertMute](ctx, "/v1/n9e/alert-mutes")
@@ -357,7 +370,8 @@ func AlertMuteGetsAll(ctx *ctx.Context) ([]*AlertMute, error) {
 }
 
 func AlertMuteUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error {
-	lst := make([]AlertMute, 0)
+	//var lst []*AlertMute
+	lst := make([]*AlertMute, 0)
 	finder := zorm.NewSelectFinder(AlertMuteTableName)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := DB(ctx).Find(&lst).Error

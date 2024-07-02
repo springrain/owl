@@ -2,13 +2,14 @@ package models
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+
+	"github.com/pkg/errors"
 )
 
 const BusiGroupTableName = "busi_group"
@@ -41,10 +42,6 @@ type UserGroupWithPermFlag struct {
 
 func (bg *BusiGroup) GetTableName() string {
 	return BusiGroupTableName
-}
-
-func (bg *BusiGroup) DB2FE() error {
-	return nil
 }
 
 func (bg *BusiGroup) FillUserGroups(ctx *ctx.Context) error {
@@ -205,7 +202,7 @@ func (bg *BusiGroup) Del(ctx *ctx.Context) error {
 	}
 
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("busi_group_id=?", bg.Id).Delete(&BusiGroupMember{}).Error; err != nil {
 				return err
 			}
@@ -239,7 +236,6 @@ func (bg *BusiGroup) Del(ctx *ctx.Context) error {
 		return zorm.UpdateFinder(ctx, f3)
 	})
 	return err
-
 }
 
 func (bg *BusiGroup) AddMembers(ctx *ctx.Context, members []BusiGroupMember, username string) error {
@@ -256,6 +252,7 @@ func (bg *BusiGroup) AddMembers(ctx *ctx.Context, members []BusiGroupMember, use
 			"update_by": username,
 		}).Error
 	*/
+
 	finder := zorm.NewUpdateFinder(BusiGroupTableName).Append("update_at=?,update_by=? WHERE id=?", time.Now().Unix(), username, bg.Id)
 	return UpdateFinder(ctx, finder)
 }
@@ -284,6 +281,7 @@ func (bg *BusiGroup) DelMembers(ctx *ctx.Context, members []BusiGroupMember, use
 			"update_by": username,
 		}).Error
 	*/
+
 	finder := zorm.NewUpdateFinder(BusiGroupTableName).Append("update_at=?,update_by=? WHERE id=?", time.Now().Unix(), username, bg.Id)
 	return UpdateFinder(ctx, finder)
 }
@@ -295,7 +293,7 @@ func (bg *BusiGroup) Update(ctx *ctx.Context, name string, labelEnable int, labe
 
 	exists, err := BusiGroupExists(ctx, "name = ? and id <> ?", name, bg.Id)
 	if err != nil {
-		return fmt.Errorf("failed to count BusiGroup:%w", err)
+		return errors.WithMessage(err, "failed to count BusiGroup")
 	}
 
 	if exists {
@@ -305,7 +303,7 @@ func (bg *BusiGroup) Update(ctx *ctx.Context, name string, labelEnable int, labe
 	if labelEnable == 1 {
 		exists, err = BusiGroupExists(ctx, "label_enable = 1 and label_value = ? and id <> ?", labelValue, bg.Id)
 		if err != nil {
-			return fmt.Errorf("failed to count BusiGroup:%w", err)
+			return errors.WithMessage(err, "failed to count BusiGroup")
 		}
 
 		if exists {
@@ -324,15 +322,15 @@ func (bg *BusiGroup) Update(ctx *ctx.Context, name string, labelEnable int, labe
 			"update_by":    updateBy,
 		}).Error
 	*/
+
 	finder := zorm.NewUpdateFinder(BusiGroupTableName).Append("name=?,label_enable=?,label_value=?,update_at=?,update_by=? WHERE id=?", name, labelEnable, labelValue, time.Now().Unix(), updateBy, bg.Id)
 	return UpdateFinder(ctx, finder)
-
 }
 
 func BusiGroupAdd(ctx *ctx.Context, name string, labelEnable int, labelValue string, members []BusiGroupMember, creator string) error {
 	exists, err := BusiGroupExists(ctx, "name=?", name)
 	if err != nil {
-		return fmt.Errorf("failed to count BusiGroup:%w", err)
+		return errors.WithMessage(err, "failed to count BusiGroup")
 	}
 
 	if exists {
@@ -342,7 +340,7 @@ func BusiGroupAdd(ctx *ctx.Context, name string, labelEnable int, labelValue str
 	if labelEnable == 1 {
 		exists, err = BusiGroupExists(ctx, "label_enable = 1 and label_value = ?", labelValue)
 		if err != nil {
-			return fmt.Errorf("failed to count BusiGroup:%w", err)
+			return errors.WithMessage(err, "failed to count BusiGroup")
 		}
 
 		if exists {
@@ -356,7 +354,7 @@ func BusiGroupAdd(ctx *ctx.Context, name string, labelEnable int, labelValue str
 	for i := 0; i < count; i++ {
 		ug, err := UserGroupGet(ctx, "id=?", members[i].UserGroupId)
 		if err != nil {
-			return fmt.Errorf("failed to get UserGroup:%w", err)
+			return errors.WithMessage(err, "failed to get UserGroup")
 		}
 
 		if ug == nil {
@@ -376,7 +374,7 @@ func BusiGroupAdd(ctx *ctx.Context, name string, labelEnable int, labelValue str
 	}
 
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(obj).Error; err != nil {
 				return err
 			}

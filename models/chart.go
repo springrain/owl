@@ -32,8 +32,11 @@ func (c *Chart) Add(ctx *ctx.Context) error {
 	return Insert(ctx, c)
 }
 
-func (c *Chart) Update(ctx *ctx.Context, selectFields ...string) error {
-	return Update(ctx, c, selectFields)
+func (c *Chart) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, c, cols)
 	//return DB(ctx).Model(c).Select(selectField, selectFields...).Updates(c).Error
 }
 

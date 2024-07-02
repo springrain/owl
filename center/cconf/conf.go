@@ -12,6 +12,7 @@ type Center struct {
 	AnonymousAccess        AnonymousAccess
 	UseFileAssets          bool
 	FlashDuty              FlashDuty
+	EventHistoryGroupView  bool
 }
 
 type Plugin struct {
@@ -22,8 +23,9 @@ type Plugin struct {
 }
 
 type FlashDuty struct {
-	Api     string        `json:"api"`
-	Timeout time.Duration `json:"timeout"`
+	Api     string
+	Headers map[string]string
+	Timeout time.Duration
 }
 
 type AnonymousAccess struct {

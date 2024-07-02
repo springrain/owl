@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +9,9 @@ import (
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+
+	"github.com/pkg/errors"
+	"github.com/toolkits/pkg/container/set"
 )
 
 const TargetTableName = "target"
@@ -44,10 +46,6 @@ func (t *Target) GetTableName() string {
 	return TargetTableName
 }
 
-func (t *Target) DB2FE() error {
-	return nil
-}
-
 func (t *Target) FillGroup(ctx *ctx.Context, cache map[int64]*BusiGroup) error {
 	if t.GroupId <= 0 {
 		return nil
@@ -61,7 +59,7 @@ func (t *Target) FillGroup(ctx *ctx.Context, cache map[int64]*BusiGroup) error {
 
 	bg, err := BusiGroupGetById(ctx, t.GroupId)
 	if err != nil {
-		return fmt.Errorf("failed to get busi group:%w", err)
+		return errors.WithMessage(err, "failed to get busi group")
 	}
 
 	t.GroupObj = bg
@@ -74,9 +72,7 @@ func TargetStatistics(ctx *ctx.Context) (*Statistics, error) {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=target")
 		return s, err
 	}
-
 	return StatisticsGet(ctx, TargetTableName)
-
 	/*
 		var stats []*Statistics
 		err := DB(ctx).Model(&Target{}).Select("count(*) as total", "max(update_at) as last_updated").Find(&stats).Error
@@ -163,7 +159,6 @@ func TargetGetsByFilter(ctx *ctx.Context, query []map[string]interface{}, limit,
 	finder, page := TargetFilterQueryBuild(ctx, "*", query, limit, offset)
 	finder.Append("order by ident asc ")
 	err := zorm.Query(ctx.Ctx, finder, &lst, page)
-	//err := session.Order("ident").Find(&lst).Error
 	cache := make(map[int64]*BusiGroup)
 	for i := 0; i < len(lst); i++ {
 		lst[i].TagsJSON = strings.Fields(lst[i].Tags)
@@ -275,7 +270,7 @@ func TargetUpdateBgid(ctx *ctx.Context, idents []string, bgid int64, clearTags b
 }
 
 func TargetGet(ctx *ctx.Context, where string, args ...interface{}) (*Target, error) {
-	lst := make([]Target, 0)
+	lst := make([]*Target, 0)
 	finder := zorm.NewSelectFinder(TargetTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
@@ -290,7 +285,7 @@ func TargetGet(ctx *ctx.Context, where string, args ...interface{}) (*Target, er
 
 	lst[0].TagsJSON = strings.Fields(lst[0].Tags)
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func TargetGetById(ctx *ctx.Context, id int64) (*Target, error) {
@@ -299,6 +294,69 @@ func TargetGetById(ctx *ctx.Context, id int64) (*Target, error) {
 
 func TargetGetByIdent(ctx *ctx.Context, ident string) (*Target, error) {
 	return TargetGet(ctx, "ident = ?", ident)
+}
+
+func TargetsGetByIdents(ctx *ctx.Context, idents []string) ([]*Target, error) {
+	targets := make([]*Target, 0)
+	finder := zorm.NewSelectFinder(TargetTableName).Append("WHERE idents IN (?)", idents)
+	err := zorm.Query(ctx.Ctx, finder, &targets, nil)
+	//var targets []*Target
+	//err := DB(ctx).Where("ident IN ?", idents).Find(&targets).Error
+	return targets, err
+}
+
+func TargetsGetIdentsByIdentsAndHostIps(ctx *ctx.Context, idents, hostIps []string) (map[string]string, []string, error) {
+	inexistence := make(map[string]string)
+	identSet := set.NewStringSet()
+
+	// Query the ident corresponding to idents
+	if len(idents) > 0 {
+		var identsFromIdents []string
+		finder := zorm.NewSelectFinder(TargetTableName, "ident").Append("WHERE  ident in (?)", idents)
+		err := zorm.Query(ctx.Ctx, finder, &identsFromIdents, nil)
+		//err := DB(ctx).Model(&Target{}).Where("ident IN ?", idents).Pluck("ident", &identsFromIdents).Error
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, ident := range identsFromIdents {
+			identSet.Add(ident)
+		}
+
+		for _, ident := range idents {
+			if !identSet.Exists(ident) {
+				inexistence[ident] = "Ident not found"
+			}
+		}
+	}
+
+	// Query the hostIp corresponding to idents
+	if len(hostIps) > 0 {
+		var hostIpToIdentMap []struct {
+			HostIp string
+			Ident  string
+		}
+		finder := zorm.NewSelectFinder(TargetTableName, "host_ip, ident").Append("WHERE  host_ip in (?)", hostIps)
+		err := zorm.Query(ctx.Ctx, finder, &hostIpToIdentMap, nil)
+		//err := DB(ctx).Model(&Target{}).Select("host_ip, ident").Where("host_ip IN ?", hostIps).Scan(&hostIpToIdentMap).Error
+		if err != nil {
+			return nil, nil, err
+		}
+
+		hostIpToIdent := set.NewStringSet()
+		for _, entry := range hostIpToIdentMap {
+			hostIpToIdent.Add(entry.HostIp)
+			identSet.Add(entry.Ident)
+		}
+
+		for _, hostIp := range hostIps {
+			if !hostIpToIdent.Exists(hostIp) {
+				inexistence[hostIp] = "HostIp not found"
+			}
+		}
+	}
+
+	return inexistence, identSet.ToSlice(), nil
 }
 
 func TargetGetTags(ctx *ctx.Context, idents []string) ([]string, error) {
@@ -358,12 +416,11 @@ func (t *Target) AddTags(ctx *ctx.Context, tags []string) error {
 			"update_at": time.Now().Unix(),
 		}).Error
 	*/
-
 }
 
 func (t *Target) DelTags(ctx *ctx.Context, tags []string) error {
-	for i := 0; i < len(tags); i++ {
-		t.Tags = strings.ReplaceAll(t.Tags, tags[i]+" ", "")
+	for _, tag := range tags {
+		t.Tags = strings.ReplaceAll(t.Tags, tag+" ", "")
 	}
 	finder := zorm.NewUpdateFinder(TargetTableName).Append("tags=?,update_at=? WHERE id=?", t.Tags, time.Now().Unix(), t.Id)
 	return UpdateFinder(ctx, finder)
@@ -435,6 +492,7 @@ func TargetIds(ctx *ctx.Context, idents []string) ([]int64, error) {
 	}
 	finder := zorm.NewSelectFinder(TargetTableName, "id").Append("WHERE ident in (?)", idents)
 	err := zorm.Query(ctx.Ctx, finder, &ret, nil)
+
 	//err := DB(ctx).Model(&Target{}).Where("ident in ?", idents).Pluck("id", &ret).Error
 	return ret, err
 }
@@ -455,6 +513,7 @@ func IdentsFilter(ctx *ctx.Context, idents []string, where string, args ...inter
 }
 
 func (m *Target) UpdateFieldsMap(ctx *ctx.Context, fields map[string]interface{}) error {
+
 	entityMap := zorm.NewEntityMap(TargetTableName)
 	entityMap.PkColumnName = m.GetPKColumnName()
 	for k, v := range fields {

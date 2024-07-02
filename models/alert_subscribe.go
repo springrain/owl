@@ -6,12 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"errors"
-
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/ormx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 )
 
@@ -25,9 +24,9 @@ type AlertSubscribe struct {
 	GroupId           int64        `json:"group_id" column:"group_id"`
 	Prod              string       `json:"prod" column:"prod"`
 	Cate              string       `json:"cate" column:"cate"`
-	DatasourceIds     string       `json:"-" column:"datasource_ids"`     // datasource ids
-	DatasourceIdsJson []int64      `json:"datasource_ids"`                // for fe
-	Cluster           string       `json:"cluster" column:"cluster_name"` // take effect by clusters, seperated by space
+	DatasourceIds     string       `json:"-" column:"datasource_ids"` // datasource ids
+	DatasourceIdsJson []int64      `json:"datasource_ids"`            // for fe
+	Cluster           string       `json:"cluster" column:"cluster"`  // take effect by clusters, seperated by space
 	RuleId            int64        `json:"rule_id" column:"rule_id"`
 	Severities        string       `json:"-" column:"severities"`              // sub severity
 	SeveritiesJson    []int        `json:"severities"`                         // for fe
@@ -59,7 +58,7 @@ type AlertSubscribe struct {
 }
 
 func (s *AlertSubscribe) GetTableName() string {
-	return AlertSubscribeTableName
+	return "alert_subscribe"
 }
 
 func AlertSubscribeGets(ctx *ctx.Context, groupId int64) ([]AlertSubscribe, error) {
@@ -67,6 +66,22 @@ func AlertSubscribeGets(ctx *ctx.Context, groupId int64) ([]AlertSubscribe, erro
 	finder := zorm.NewSelectFinder(AlertSubscribeTableName).Append("WHERE group_id=? order by id desc", groupId)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := DB(ctx).Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	return lst, err
+	//err = DB(ctx).Where("group_id=?", groupId).Order("id desc").Find(&lst).Error
+	//return
+}
+
+func AlertSubscribeGetsByBGIds(ctx *ctx.Context, bgids []int64) ([]AlertSubscribe, error) {
+	lst := make([]AlertSubscribe, 0)
+	finder := zorm.NewSelectFinder(AlertSubscribeTableName).Append("WHERE 1=1")
+	//session := DB(ctx)
+	if len(bgids) > 0 {
+		//session = session.Where("group_id in (?)", bgids)
+		finder.Append("and group_id in (?)", bgids)
+	}
+	finder.Append(" order by id desc")
+	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//err = session.Order("id desc").Find(&lst).Error
 	return lst, err
 }
 
@@ -85,18 +100,12 @@ func AlertSubscribeGetsByService(ctx *ctx.Context) ([]AlertSubscribe, error) {
 	return lst, err
 }
 
-func AlertSubscribeGetsByBGIds(ctx *ctx.Context, bgIds []int64) (lst []AlertSubscribe, err error) {
-	//err = DB(ctx).Where("group_id in (?)", bgIds).Order("id desc").Find(&lst).Error
-	finder := zorm.NewSelectFinder(AlertSubscribeTableName).Append("WHERE group_id in (?) order by id desc ", bgIds)
-	err = zorm.Query(ctx.Ctx, finder, &lst, nil)
-	return
-}
-
 func AlertSubscribeGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertSubscribe, error) {
-	lst := make([]AlertSubscribe, 0)
+	lst := make([]*AlertSubscribe, 0)
 	finder := zorm.NewSelectFinder(AlertSubscribeTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//var lst []*AlertSubscribe
 	//err := DB(ctx).Where(where, args...).Find(&lst).Error
 	if err != nil {
 		return nil, err
@@ -106,7 +115,7 @@ func AlertSubscribeGet(ctx *ctx.Context, where string, args ...interface{}) (*Al
 		return nil, nil
 	}
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func (s *AlertSubscribe) IsDisabled() bool {
@@ -154,12 +163,10 @@ func (s *AlertSubscribe) FE2DB() error {
 		b, _ := json.Marshal(s.SeveritiesJson)
 		s.Severities = string(b)
 	}
-
 	if len(s.RuleIdsJson) > 0 {
 		b, _ := json.Marshal(s.RuleIdsJson)
 		s.RuleIds = string(b)
 	}
-
 	return nil
 }
 
@@ -187,13 +194,11 @@ func (s *AlertSubscribe) DB2FE() error {
 			return err
 		}
 	}
-
 	if s.RuleIds != "" {
 		if err := json.Unmarshal([]byte(s.RuleIds), &s.RuleIdsJson); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -326,7 +331,7 @@ func (s *AlertSubscribe) FillUserGroups(ctx *ctx.Context, cache map[int64]*UserG
 	return nil
 }
 
-func (s *AlertSubscribe) Update(ctx *ctx.Context, selectFields ...string) error {
+func (s *AlertSubscribe) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
 	if err := s.Verify(); err != nil {
 		return err
 	}
@@ -335,18 +340,20 @@ func (s *AlertSubscribe) Update(ctx *ctx.Context, selectFields ...string) error 
 		return err
 	}
 
-	return Update(ctx, s, selectFields)
-	//return DB(ctx).Model(s).Select(selectFields...).Updates(s).Error
+	//---------------------------------------------------------------------//
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, s, cols)
+	//return DB(ctx).Model(s).Select(selectField, selectFields...).Updates(s).Error
 }
 
 func AlertSubscribeDel(ctx *ctx.Context, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
 	}
-
 	finder := zorm.NewDeleteFinder(AlertSubscribeTableName).Append("WHERE id in (?)", ids)
 	return UpdateFinder(ctx, finder)
-
 	//return DB(ctx).Where("id in ?", ids).Delete(new(AlertSubscribe)).Error
 }
 
@@ -391,6 +398,7 @@ func AlertSubscribeGetsAll(ctx *ctx.Context) ([]*AlertSubscribe, error) {
 	finder := zorm.NewSelectFinder(AlertSubscribeTableName)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	return lst, err
+	//return lst, err
 }
 
 func (s *AlertSubscribe) MatchProd(prod string) bool {
@@ -429,6 +437,10 @@ func (s *AlertSubscribe) ModifyEvent(event *AlertCurEvent) {
 	if s.RedefineWebhooks == 1 {
 		event.Callbacks = s.Webhooks
 		event.CallbacksJSON = s.WebhooksJson
+	} else {
+		// 将 callback 重置为空，防止事件被订阅之后，再次将事件发送给回调地址
+		event.Callbacks = ""
+		event.CallbacksJSON = []string{}
 	}
 
 	event.NotifyGroups = s.UserGroupIds
@@ -441,7 +453,7 @@ func (s *AlertSubscribe) UpdateFieldsMap(ctx *ctx.Context, fields map[string]int
 }
 
 func AlertSubscribeUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error {
-	lst := make([]AlertSubscribe, 0)
+	lst := make([]*AlertSubscribe, 0)
 	finder := zorm.NewSelectFinder(AlertSubscribeTableName)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := DB(ctx).Find(&lst).Error

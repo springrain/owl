@@ -3,8 +3,7 @@ package logx
 import (
 	"fmt"
 
-	"errors"
-
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 )
 
@@ -25,7 +24,7 @@ func Init(c Config) (func(), error) {
 	} else if c.Output == "file" {
 		lb, err := logger.NewFileBackend(c.Dir)
 		if err != nil {
-			return nil, fmt.Errorf("NewFileBackend failed:%w", err)
+			return nil, errors.WithMessage(err, "NewFileBackend failed")
 		}
 
 		if c.KeepHours != 0 {

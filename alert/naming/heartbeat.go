@@ -1,7 +1,6 @@
 package naming
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -63,11 +62,8 @@ func (n *Naming) loopDeleteInactiveInstances() {
 }
 
 func (n *Naming) DeleteInactiveInstances() {
-
 	finder := zorm.NewDeleteFinder(models.AlertingEnginesTableName).Append("WHERE clock < ?", time.Now().Unix()-600)
-	_, err := zorm.Transaction(n.ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-		return zorm.UpdateFinder(ctx, finder)
-	})
+	err := models.UpdateFinder(n.ctx, finder)
 	//err := models.DB(n.ctx).Where("clock < ?", time.Now().Unix()-600).Delete(new(models.AlertingEngines)).Error
 	if err != nil {
 		logger.Errorf("delete inactive instances err:%v", err)
@@ -117,7 +113,9 @@ func (n *Naming) heartbeat() error {
 		}
 	}
 
+	newDatasource := make(map[int64]struct{})
 	for i := 0; i < len(datasourceIds); i++ {
+		newDatasource[datasourceIds[i]] = struct{}{}
 		servers, err := n.ActiveServers(datasourceIds[i])
 		if err != nil {
 			logger.Warningf("hearbeat %d get active server err:%v", datasourceIds[i], err)
@@ -135,6 +133,13 @@ func (n *Naming) heartbeat() error {
 
 		RebuildConsistentHashRing(fmt.Sprintf("%d", datasourceIds[i]), servers)
 		localss[datasourceIds[i]] = newss
+	}
+
+	for dsId := range localss {
+		if _, exists := newDatasource[dsId]; !exists {
+			delete(localss, dsId)
+			DatasourceHashRing.Del(fmt.Sprintf("%d", dsId))
+		}
 	}
 
 	// host 告警使用的是 hash ring

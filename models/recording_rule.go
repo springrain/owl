@@ -27,7 +27,7 @@ type RecordingRule struct {
 	GroupId           int64         `json:"group_id" column:"group_id"`                     // busi group id
 	DatasourceIds     string        `json:"-" column:"datasource_ids"`                      // datasource ids
 	DatasourceIdsJson []int64       `json:"datasource_ids"`                                 // for fe
-	Cluster           string        `json:"cluster" column:"cluster_name"`                  // take effect by cluster, seperated by space
+	Cluster           string        `json:"cluster" column:"cluster"`                       // take effect by cluster, seperated by space
 	Name              string        `json:"name" column:"name"`                             // new metric name
 	Disabled          int           `json:"disabled" column:"disabled"`                     // 0: enabled, 1: disabled
 	PromQl            string        `json:"prom_ql" column:"prom_ql"`                       // just one ql for promql
@@ -232,7 +232,10 @@ func RecordingRuleGets(ctx *ctx.Context, groupId int64) ([]RecordingRule, error)
 
 func RecordingRuleGetsByBGIds(ctx *ctx.Context, bgIds []int64) ([]RecordingRule, error) {
 	//session := DB(ctx).Where("group_id in (?)", bgIds).Order("name")
-	finder := zorm.NewSelectFinder(RecordingRuleTableName).Append("WHERE group_id in (?) order by name asc", bgIds)
+	finder := zorm.NewSelectFinder(RecordingRuleTableName)
+	if len(bgIds) > 0 {
+		finder.Append("WHERE group_id in (?) order by name asc", bgIds)
+	}
 	lst := make([]RecordingRule, 0)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := session.Find(&lst).Error

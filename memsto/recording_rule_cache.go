@@ -8,6 +8,8 @@ import (
 	"github.com/ccfos/nightingale/v6/dumper"
 	"github.com/ccfos/nightingale/v6/models"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
+
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 )
 
@@ -105,7 +107,7 @@ func (rrc *RecordingRuleCacheType) syncRecordingRules() error {
 	stat, err := models.RecordingRuleStatistics(rrc.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("recording_rules", start.Unix(), -1, -1, "failed to query statistics: "+err.Error())
-		return fmt.Errorf("failed to exec RecordingRuleStatistics:%w", err)
+		return errors.WithMessage(err, "failed to exec RecordingRuleStatistics")
 	}
 
 	if !rrc.StatChanged(stat.Total, stat.LastUpdated) {
@@ -118,7 +120,7 @@ func (rrc *RecordingRuleCacheType) syncRecordingRules() error {
 	lst, err := models.RecordingRuleGetsByCluster(rrc.ctx)
 	if err != nil {
 		dumper.PutSyncRecord("recording_rules", start.Unix(), -1, -1, "failed to query records: "+err.Error())
-		return fmt.Errorf("failed to exec RecordingRuleGetsByCluster:%w", err)
+		return errors.WithMessage(err, "failed to exec RecordingRuleGetsByCluster")
 	}
 
 	m := make(map[int64]*models.RecordingRule)

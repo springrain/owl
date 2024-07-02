@@ -2,9 +2,8 @@ package router
 
 import (
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +12,9 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/toolkits/pkg/logger"
+
+	"github.com/mailru/easyjson"
+	_ "github.com/mailru/easyjson/gen"
 )
 
 // easyjson:json
@@ -24,6 +26,7 @@ type HTTPMetric struct {
 	Tags         map[string]string `json:"tags"`
 }
 
+//easyjson:json
 type HTTPMetricArr []HTTPMetric
 
 func (m *HTTPMetric) Clean(ts int64) error {
@@ -131,10 +134,10 @@ func (rt *Router) openTSDBPut(c *gin.Context) {
 			return
 		}
 		defer r.Close()
-		bs, err = io.ReadAll(r)
+		bs, err = ioutil.ReadAll(r)
 	} else {
 		defer c.Request.Body.Close()
-		bs, err = io.ReadAll(c.Request.Body)
+		bs, err = ioutil.ReadAll(c.Request.Body)
 	}
 
 	if err != nil {
@@ -145,10 +148,10 @@ func (rt *Router) openTSDBPut(c *gin.Context) {
 	var arr HTTPMetricArr
 
 	if bs[0] == '[' {
-		err = json.Unmarshal(bs, &arr)
+		err = easyjson.Unmarshal(bs, &arr)
 	} else {
 		var one HTTPMetric
-		err = json.Unmarshal(bs, &one)
+		err = easyjson.Unmarshal(bs, &one)
 		arr = []HTTPMetric{one}
 	}
 

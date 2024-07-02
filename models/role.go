@@ -22,10 +22,6 @@ func (Role) GetTableName() string {
 	return RoleTableName
 }
 
-func (r *Role) DB2FE() error {
-	return nil
-}
-
 func RoleGets(ctx *ctx.Context, where string, args ...interface{}) ([]Role, error) {
 	objs := make([]Role, 0)
 	finder := zorm.NewSelectFinder(RoleTableName)

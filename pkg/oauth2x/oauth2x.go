@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -16,7 +15,7 @@ import (
 	"github.com/toolkits/pkg/logger"
 
 	"github.com/google/uuid"
-	//jsoniter "github.com/json-iterator/go"
+	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/oauth2"
 )
 
@@ -24,6 +23,7 @@ type SsoClient struct {
 	Enable          bool
 	Config          oauth2.Config
 	SsoAddr         string
+	SsoLogoutAddr   string
 	UserInfoAddr    string
 	TranTokenMethod string
 	CallbackAddr    string
@@ -48,6 +48,7 @@ type Config struct {
 	DisplayName     string
 	RedirectURL     string
 	SsoAddr         string
+	SsoLogoutAddr   string
 	TokenAddr       string
 	UserInfoAddr    string
 	TranTokenMethod string
@@ -86,6 +87,7 @@ func (s *SsoClient) Reload(cf Config) {
 
 	s.Enable = cf.Enable
 	s.SsoAddr = cf.SsoAddr
+	s.SsoLogoutAddr = cf.SsoLogoutAddr
 	s.UserInfoAddr = cf.UserInfoAddr
 	s.TranTokenMethod = cf.TranTokenMethod
 	s.CallbackAddr = cf.RedirectURL
@@ -131,6 +133,16 @@ func (s *SsoClient) GetDisplayName() string {
 	}
 
 	return s.DisplayName
+}
+
+func (s *SsoClient) GetSsoLogoutAddr() string {
+	s.RLock()
+	defer s.RUnlock()
+	if !s.Enable {
+		return ""
+	}
+
+	return s.SsoLogoutAddr
 }
 
 func wrapStateKey(key string) string {
@@ -248,58 +260,11 @@ func (s *SsoClient) getUserInfo(UserInfoAddr, accessToken string, TranTokenMetho
 		return nil, err
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	return body, err
 }
 
-func getUserinfoField(input []byte, isArray bool, prefix, field string) string {
-	// 创建一个空接口变量来存储解析后的 JSON 数据
-	var jsonData interface{}
-
-	// 使用标准库的 json.Unmarshal 将输入的 JSON 字节流解析为 jsonData
-	if err := json.Unmarshal(input, &jsonData); err != nil {
-		return ""
-	}
-
-	// 用于存储最终字段值的空接口变量
-	var fieldValue interface{}
-
-	// 根据传入的参数进行逻辑处理
-	if prefix == "" {
-		if isArray {
-			// 如果是数组，我们可以假设 jsonData 是一个 []interface{}
-			// 我们获取索引为 0 的元素，然后将其转换为 map[string]interface{}
-			// 接着我们可以从 map 中获取指定的字段值
-			fieldValue = jsonData.([]interface{})[0].(map[string]interface{})[field]
-		} else {
-			// 如果不是数组，我们假设 jsonData 是一个 map[string]interface{}
-			// 然后我们直接从 map 中获取指定的字段值
-			fieldValue = jsonData.(map[string]interface{})[field]
-		}
-	} else {
-		if isArray {
-			// 类似上面的逻辑，我们首先获取 prefix 对应的数组
-			// 然后从数组中获取索引为 0 的元素，将其转换为 map[string]interface{}
-			// 最后从 map 中获取指定的字段值
-			fieldValue = jsonData.(map[string]interface{})[prefix].([]interface{})[0].(map[string]interface{})[field]
-		} else {
-			// 类似上面的逻辑，我们首先获取 prefix 对应的 map
-			// 然后从 map 中获取指定的字段值
-			fieldValue = jsonData.(map[string]interface{})[prefix].(map[string]interface{})[field]
-		}
-	}
-
-	// 如果字段值为空，返回空字符串
-	if fieldValue == nil {
-		return ""
-	}
-
-	// 将字段值转换为字符串并返回
-	return fieldValue.(string)
-}
-
-/*
 func getUserinfoField(input []byte, isArray bool, prefix, field string) string {
 	if prefix == "" {
 		if isArray {
@@ -315,4 +280,3 @@ func getUserinfoField(input []byte, isArray bool, prefix, field string) string {
 		}
 	}
 }
-*/

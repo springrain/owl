@@ -20,7 +20,7 @@ type AlertHisEvent struct {
 	Cate               string            `json:"cate" column:"cate"`
 	IsRecovered        int               `json:"is_recovered" column:"is_recovered"`
 	DatasourceId       int64             `json:"datasource_id" column:"datasource_id"`
-	Cluster            string            `json:"cluster" column:"cluster_name"`
+	Cluster            string            `json:"cluster" column:"cluster"`
 	GroupId            int64             `json:"group_id" column:"group_id"`
 	GroupName          string            `json:"group_name" column:"group_name"` // busi group name
 	Hash               string            `json:"hash" column:"hash"`
@@ -118,39 +118,39 @@ func (e *AlertHisEvent) FillNotifyGroups(ctx *ctx.Context, cache map[int64]*User
 	return nil
 }
 
-func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgid, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string) (int64, error) {
+func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string) (int64, error) {
 	finder := zorm.NewSelectFinder(AlertHisEventTableName, "count(*)")
 	finder.Append("WHERE last_eval_time between ? and ?", stime, etime)
 	//session := DB(ctx).Model(&AlertHisEvent{}).Where("last_eval_time between ? and ?", stime, etime)
 
 	if len(prods) > 0 {
-		//session = session.Where("rule_prod in ?", prods)
 		finder.Append("and rule_prod in (?)", prods)
+		//session = session.Where("rule_prod in ?", prods)
 	}
 
-	if bgid > 0 {
-		//session = session.Where("group_id = ?", bgid)
-		finder.Append("and group_id = ?", bgid)
+	if len(bgids) > 0 {
+		finder.Append("and group_id in (?)", bgids)
+		//session = session.Where("group_id in ?", bgids)
 	}
 
 	if severity >= 0 {
-		//session = session.Where("severity = ?", severity)
 		finder.Append("and severity = ?", severity)
+		//session = session.Where("severity = ?", severity)
 	}
 
 	if recovered >= 0 {
-		//session = session.Where("is_recovered = ?", recovered)
 		finder.Append("and is_recovered = ?", recovered)
+		//session = session.Where("is_recovered = ?", recovered)
 	}
 
 	if len(dsIds) > 0 {
-		//session = session.Where("datasource_id in ?", dsIds)
 		finder.Append("and datasource_id in (?)", dsIds)
+		//session = session.Where("datasource_id in ?", dsIds)
 	}
 
 	if len(cates) > 0 {
-		//session = session.Where("cate in ?", cates)
 		finder.Append("and cate in (?)", cates)
+		//session = session.Where("cate in ?", cates)
 	}
 
 	if query != "" {
@@ -165,39 +165,39 @@ func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgid, stime, etime int
 	//return Count(session)
 }
 
-func AlertHisEventGets(ctx *ctx.Context, prods []string, bgid, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string, limit, offset int) ([]AlertHisEvent, error) {
+func AlertHisEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string, limit, offset int) ([]AlertHisEvent, error) {
 	finder := zorm.NewSelectFinder(AlertHisEventTableName)
 	finder.Append("WHERE last_eval_time between ? and ?", stime, etime)
 	//session := DB(ctx).Where("last_eval_time between ? and ?", stime, etime)
 
-	if len(prods) != 0 {
-		//session = session.Where("rule_prod in ?", prods)
+	if len(prods) > 0 {
 		finder.Append("and rule_prod in (?)", prods)
+		//session = session.Where("rule_prod in ?", prods)
 	}
 
-	if bgid > 0 {
-		//session = session.Where("group_id = ?", bgid)
-		finder.Append("and group_id = ?", bgid)
+	if len(bgids) > 0 {
+		finder.Append("and group_id in (?)", bgids)
+		//session = session.Where("group_id in ?", bgids)
 	}
 
 	if severity >= 0 {
-		//session = session.Where("severity = ?", severity)
 		finder.Append("and severity = ?", severity)
+		//session = session.Where("severity = ?", severity)
 	}
 
 	if recovered >= 0 {
-		//session = session.Where("is_recovered = ?", recovered)
 		finder.Append("and is_recovered = ?", recovered)
+		//session = session.Where("is_recovered = ?", recovered)
 	}
 
 	if len(dsIds) > 0 {
-		//session = session.Where("datasource_id in ?", dsIds)
 		finder.Append("and datasource_id in (?)", dsIds)
+		//session = session.Where("datasource_id in ?", dsIds)
 	}
 
 	if len(cates) > 0 {
-		//session = session.Where("cate in ?", cates)
 		finder.Append("and cate in (?)", cates)
+		//session = session.Where("cate in ?", cates)
 	}
 
 	if query != "" {
@@ -208,7 +208,8 @@ func AlertHisEventGets(ctx *ctx.Context, prods []string, bgid, stime, etime int6
 			finder.Append("and (rule_name like ? or tags like ?)", qarg, qarg)
 		}
 	}
-	finder.Append("order by id desc")
+
+	finder.Append("order by trigger_time desc, id desc")
 
 	lst := make([]AlertHisEvent, 0)
 	page := zorm.NewPage()
@@ -216,7 +217,9 @@ func AlertHisEventGets(ctx *ctx.Context, prods []string, bgid, stime, etime int6
 	page.PageNo = offset / limit
 	finder.SelectTotalCount = false
 	err := zorm.Query(ctx.Ctx, finder, &lst, page)
-	//err := session.Order("id desc").Limit(limit).Offset(offset).Find(&lst).Error
+
+	//var lst []AlertHisEvent
+	//err := session.Order("trigger_time desc, id desc").Limit(limit).Offset(offset).Find(&lst).Error
 
 	if err == nil {
 		for i := 0; i < len(lst); i++ {
@@ -228,7 +231,7 @@ func AlertHisEventGets(ctx *ctx.Context, prods []string, bgid, stime, etime int6
 }
 
 func AlertHisEventGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertHisEvent, error) {
-	lst := make([]AlertHisEvent, 0)
+	lst := make([]*AlertHisEvent, 0)
 	finder := zorm.NewSelectFinder(AlertHisEventTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
@@ -244,7 +247,7 @@ func AlertHisEventGet(ctx *ctx.Context, where string, args ...interface{}) (*Ale
 	lst[0].DB2FE()
 	lst[0].FillNotifyGroups(ctx, make(map[int64]*UserGroup))
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func AlertHisEventGetById(ctx *ctx.Context, id int64) (*AlertHisEvent, error) {
@@ -257,7 +260,8 @@ func (m *AlertHisEvent) UpdateFieldsMap(ctx *ctx.Context, fields map[string]inte
 }
 
 func AlertHisEventUpgradeToV6(ctx *ctx.Context, dsm map[string]Datasource) error {
-	lst := make([]AlertHisEvent, 0)
+	//var lst []*AlertHisEvent
+	lst := make([]*AlertHisEvent, 0)
 	finder := zorm.NewSelectFinder(AlertHisEventTableName).Append("WHERE trigger_time > ? order by id desc", time.Now().Unix()-3600*24*30)
 	page := zorm.NewPage()
 	page.PageSize = 10000
@@ -314,6 +318,7 @@ func EventPersist(ctx *ctx.Context, event *AlertCurEvent) error {
 	}
 
 	his := event.ToHis(ctx)
+
 	// 不管是告警还是恢复，全量告警里都要记录
 	if err := his.Add(ctx); err != nil {
 		return fmt.Errorf("add his event error:%v", err)
@@ -337,6 +342,8 @@ func EventPersist(ctx *ctx.Context, event *AlertCurEvent) error {
 			}
 		}
 
+		// use his id as cur id
+		event.Id = his.Id
 		return nil
 	}
 

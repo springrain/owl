@@ -19,7 +19,6 @@ type BoardBusigroup struct {
 func (bb *BoardBusigroup) GetTableName() string {
 	return BoardBusigroupTableName
 }
-
 func (bb *BoardBusigroup) GetPKColumnName() string {
 	// 如果没有主键
 	return ""
@@ -49,7 +48,6 @@ func BoardBusigroupAdd(ctx context.Context, boardId int64, busiGroupIds []int64)
 }
 
 func BoardBusigroupUpdate(ctx *ctx.Context, boardId int64, busiGroupIds []int64) error {
-
 	_, err := zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
 		finder := zorm.NewDeleteFinder(BoardBusigroupTableName).Append("WHERE board_id=?", boardId)
 		id, err := zorm.UpdateFinder(ctx, finder)
@@ -59,7 +57,6 @@ func BoardBusigroupUpdate(ctx *ctx.Context, boardId int64, busiGroupIds []int64)
 		return nil, BoardBusigroupAdd(ctx, boardId, busiGroupIds)
 	})
 	return err
-
 	/*
 		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("board_id=?", boardId).Delete(&BoardBusigroup{}).Error; err != nil {
@@ -72,7 +69,6 @@ func BoardBusigroupUpdate(ctx *ctx.Context, boardId int64, busiGroupIds []int64)
 			return nil
 		})
 	*/
-
 }
 
 func BoardBusigroupDelByBoardId(ctx *ctx.Context, boardId int64) error {
@@ -87,9 +83,9 @@ func BoardBusigroupDelByBoardId(ctx *ctx.Context, boardId int64) error {
 // BoardBusigroupCheck(rt.Ctx, board.Id, bgids)
 func BoardBusigroupCheck(ctx *ctx.Context, boardId int64, busiGroupIds []int64) (bool, error) {
 	finder := zorm.NewSelectFinder(BoardBusigroupTableName, "COUNT(*)").Append("WHERE board_id=? and busi_group_id in (?)", boardId, busiGroupIds)
-	//count, err := Count(ctx, finder)
-	//count, err := Count(DB(ctx).Where("board_id=? and busi_group_id in (?)", boardId, busiGroupIds).Model(&BoardBusigroup{}))
 	return Exists(ctx, finder)
+	//count, err := Count(DB(ctx).Where("board_id=? and busi_group_id in (?)", boardId, busiGroupIds).Model(&BoardBusigroup{}))
+	//return count > 0, err
 }
 
 func BoardBusigroupGets(ctx *ctx.Context) ([]BoardBusigroup, error) {

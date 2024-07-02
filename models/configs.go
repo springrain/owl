@@ -1,7 +1,6 @@
 package models
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 	"github.com/ccfos/nightingale/v6/pkg/secu"
 
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
 	"github.com/toolkits/pkg/runner"
 	"github.com/toolkits/pkg/str"
@@ -44,16 +44,33 @@ var (
 	ConfigEncrypted = 1 //ciphertext
 )
 
-func (c *Configs) DB2FE() error {
-	return nil
-}
-
 const (
 	SALT            = "salt"
 	RSA_PRIVATE_KEY = "rsa_private_key"
 	RSA_PUBLIC_KEY  = "rsa_public_key"
 	RSA_PASSWORD    = "rsa_password"
+	JWT_SIGNING_KEY = "jwt_signing_key"
 )
+
+func InitJWTSigningKey(ctx *ctx.Context) string {
+	val, err := ConfigsGet(ctx, JWT_SIGNING_KEY)
+	if err != nil {
+		log.Fatalln("init jwt signing key in mysql", err)
+	}
+
+	if val != "" {
+		return val
+	}
+
+	content := fmt.Sprintf("%s%d%d%s", runner.Hostname, os.Getpid(), time.Now().UnixNano(), str.RandLetters(6))
+	key := str.MD5(content)
+	err = ConfigsSet(ctx, JWT_SIGNING_KEY, key)
+	if err != nil {
+		log.Fatalln("init jwt signing key in mysql", err)
+	}
+
+	return key
+}
 
 // InitSalt generate random salt
 func InitSalt(ctx *ctx.Context) {
@@ -78,8 +95,7 @@ func InitRSAPassWord(ctx *ctx.Context) (string, error) {
 
 	val, err := ConfigsGet(ctx, RSA_PASSWORD)
 	if err != nil {
-		//return "", errors.WithMessage(err, "failed to get rsa password")
-		return "", fmt.Errorf("failed to get rsa password:%w", err)
+		return "", errors.WithMessage(err, "failed to get rsa password")
 	}
 	if val != "" {
 		return val, nil
@@ -88,8 +104,7 @@ func InitRSAPassWord(ctx *ctx.Context) (string, error) {
 	pwd := str.MD5(content)
 	err = ConfigsSet(ctx, RSA_PASSWORD, pwd)
 	if err != nil {
-		//return "", errors.WithMessage(err, "failed to set rsa password")
-		return "", fmt.Errorf("failed to set rsa password:%w", err)
+		return "", errors.WithMessage(err, "failed to set rsa password")
 	}
 	return pwd, nil
 }

@@ -2,7 +2,7 @@ package router
 
 import (
 	"compress/gzip"
-	json "encoding/json"
+	"encoding/json"
 	"io"
 	"time"
 
@@ -35,6 +35,10 @@ func (rt *Router) heartbeat(c *gin.Context) {
 
 	err = json.Unmarshal(bs, &req)
 	ginx.Dangerous(err)
+
+	if req.Hostname == "" {
+		ginx.Dangerous("hostname is required", 400)
+	}
 
 	req.Offset = (time.Now().UnixMilli() - req.UnixTime)
 	req.RemoteAddr = c.ClientIP()

@@ -20,19 +20,26 @@ func (p *BoardPayload) GetTableName() string {
 	return BoardPayloadTableName
 }
 
-func (p *BoardPayload) Update(ctx *ctx.Context, selectFields ...string) error {
-	return Update(ctx, p, selectFields)
-	//return DB(ctx).Model(p).Select(selectFields...).Updates(p).Error
+func (p *BoardPayload) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, p, cols)
+	//return DB(ctx).Model(p).Select(selectField, selectFields...).Updates(p).Error
 }
 
 func BoardPayloadGets(ctx *ctx.Context, ids []int64) ([]*BoardPayload, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("empty ids")
 	}
+
 	arr := make([]*BoardPayload, 0)
 	finder := zorm.NewSelectFinder(BoardPayloadTableName).Append("WHERE id in (?)", ids)
 	err := zorm.Query(ctx.Ctx, finder, &arr, nil)
-	//err := DB(ctx).Where("id in ?", ids).Find(&arr).Error
+	/*
+		var arr []*BoardPayload
+		err := DB(ctx).Where("id in ?", ids).Find(&arr).Error
+	*/
 	return arr, err
 }
 

@@ -2,20 +2,21 @@ package models
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
-	"github.com/ccfos/nightingale/v6/pkg/ldapx"
 	"github.com/ccfos/nightingale/v6/pkg/ormx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+	"github.com/ccfos/nightingale/v6/storage"
+	"github.com/redis/go-redis/v9"
 
-	"errors"
-
+	"github.com/pkg/errors"
+	"github.com/tidwall/gjson"
 	"github.com/toolkits/pkg/logger"
 	"github.com/toolkits/pkg/slice"
 	"github.com/toolkits/pkg/str"
@@ -36,6 +37,16 @@ const (
 	FeishuKey   = "feishu_robot_token"
 	MmKey       = "mm_webhook_url"
 	TelegramKey = "telegram_robot_token"
+
+	DingtalkDomain = "oapi.dingtalk.com"
+	WecomDomain    = "qyapi.weixin.qq.com"
+	FeishuDomain   = "open.feishu.cn"
+
+	// FeishuCardDomain The domain name of the feishu card is the same as the feishu,distinguished by the parameter
+	FeishuCardDomain = "open.feishu.cn?card=1"
+	TelegramDomain   = "api.telegram.org"
+	IbexDomain       = "ibex"
+	DefaultDomain    = "default"
 )
 
 var (
@@ -45,42 +56,49 @@ var (
 const UserTableName = "users"
 
 type User struct {
-	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
-	Id       int64    `json:"id" column:"id"`
-	Username string   `json:"username" column:"username"`
-	Nickname string   `json:"nickname" column:"nickname"`
-	Password string   `json:"-" column:"password"`
-	Phone    string   `json:"phone" column:"phone"`
-	Email    string   `json:"email" column:"email"`
-	Portrait string   `json:"portrait" column:"portrait"`
-	Roles    string   `json:"-" column:"roles"` // 这个字段写入数据库
-	RolesLst []string `json:"roles"`            // 这个字段和前端交互
-	// Contacts   ormx.JSONObj `json:"contacts" column:"contacts"`     // 内容为 map[string]string 结构
-	Contacts     string       `json:"-" column:"contacts"`            // 内容为 map[string]string 结构
-	ContactsJson ormx.JSONObj `json:"contacts"`                       // 内容为 map[string]string 结构
-	Maintainer   int          `json:"maintainer" column:"maintainer"` // 是否给管理员发消息 0:not send 1:send
-	CreateAt     int64        `json:"create_at" column:"create_at"`
-	CreateBy     string       `json:"create_by" column:"create_by"`
-	UpdateAt     int64        `json:"update_at" column:"update_at"`
-	UpdateBy     string       `json:"update_by" column:"update_by"`
-	Admin        bool         `json:"admin"` // 方便前端使用
+	Id             int64           `json:"id" column:"id"`
+	Username       string          `json:"username" column:"username"`
+	Nickname       string          `json:"nickname" column:"nickname"`
+	Password       string          `json:"-" column:"password"`
+	Phone          string          `json:"phone" column:"phone"`
+	Email          string          `json:"email" column:"email"`
+	Portrait       string          `json:"portrait" column:"portrait"`
+	Roles          string          `json:"-" column:"roles"`               // 这个字段写入数据库
+	RolesLst       []string        `json:"roles"`                          // 这个字段和前端交互
+	TeamsLst       []int64         `json:"-"`                              // 这个字段方便映射团队，前端和数据库都不用到
+	Contacts       ormx.JSONObj    `json:"contacts" column:"contacts"`     // 内容为 map[string]string 结构
+	Maintainer     int             `json:"maintainer" column:"maintainer"` // 是否给管理员发消息 0:not send 1:send
+	CreateAt       int64           `json:"create_at" column:"create_at"`
+	CreateBy       string          `json:"create_by" column:"create_by"`
+	UpdateAt       int64           `json:"update_at" column:"update_at"`
+	UpdateBy       string          `json:"update_by" column:"update_by"`
+	Belong         string          `json:"belong" column:"belong"`
+	Admin          bool            `json:"admin"` // 方便前端使用
+	UserGroupsRes  []*UserGroupRes `json:"user_groups"`
+	BusiGroupsRes  []*BusiGroupRes `json:"busi_groups"`
+	LastActiveTime int64           `json:"last_active_time" column:"last_active_time"`
+}
+
+type UserGroupRes struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+type BusiGroupRes struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 func (u *User) GetTableName() string {
 	return UserTableName
 }
 
-func (u *User) DB2FE() error {
-	return nil
-}
-
 func (u *User) String() string {
-	// bs, err := u.Contacts.MarshalJSON()
-	// if err != nil {
-	// 	return err.Error()
-	// }
-	bs := u.Contacts
+	bs, err := u.Contacts.MarshalJSON()
+	if err != nil {
+		return err.Error()
+	}
 
 	return fmt.Sprintf("<id:%d username:%s nickname:%s email:%s phone:%s contacts:%s>", u.Id, u.Username, u.Nickname, u.Email, u.Phone, string(bs))
 }
@@ -120,10 +138,67 @@ func (u *User) Verify() error {
 	return nil
 }
 
+func (u *User) UpdateSsoFields(sso string, nickname, phone, email string) []string {
+	u.UpdateAt = time.Now().Unix()
+
+	if nickname != "" {
+		u.Nickname = nickname
+	}
+	if phone != "" {
+		u.Phone = phone
+	}
+	if email != "" {
+		u.Email = email
+	}
+	u.UpdateBy = sso
+	u.Belong = sso
+
+	updatedFields := []string{"nickname", "phone", "email", "update_by", "belong"}
+	return updatedFields
+}
+
+func (u *User) UpdateSsoFieldsWithRoles(sso string, nickname, phone, email string, roles []string) []string {
+	updatedFields := u.UpdateSsoFields(sso, nickname, phone, email)
+
+	if len(roles) == 0 {
+		return updatedFields
+	}
+
+	u.Roles = strings.Join(roles, " ")
+	u.RolesLst = roles
+
+	return append(updatedFields, "roles")
+}
+
+func (u *User) FullSsoFields(sso, username, nickname, phone, email string, defaultRoles []string) {
+	now := time.Now().Unix()
+
+	u.Username = username
+	u.Password = "******"
+	u.Nickname = nickname
+	u.Phone = phone
+	u.Email = email
+	u.Portrait = ""
+	u.Roles = strings.Join(defaultRoles, " ")
+	u.RolesLst = defaultRoles
+	u.Contacts = []byte("{}")
+	u.CreateAt = now
+	u.UpdateAt = now
+	u.CreateBy = sso
+	u.UpdateBy = sso
+	u.Belong = sso
+}
+
+func (u *User) FullSsoFieldsWithTeams(sso, username, nickname, phone, email string, defaultRoles []string,
+	teams []int64) {
+	u.FullSsoFields(sso, username, nickname, phone, email, defaultRoles)
+	u.TeamsLst = teams
+}
+
 func (u *User) Add(ctx *ctx.Context) error {
 	user, err := UserGetByUsername(ctx, u.Username)
 	if err != nil {
-		return fmt.Errorf("failed to query user:%w", err)
+		return errors.WithMessage(err, "failed to query user")
 	}
 
 	if user != nil {
@@ -136,11 +211,16 @@ func (u *User) Add(ctx *ctx.Context) error {
 	return Insert(ctx, u)
 }
 
-func (u *User) Update(ctx *ctx.Context, selectFields ...string) error {
-	if err := u.Verify(); err != nil {
-		return err
+func (u *User) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
+	if u.Belong == "" {
+		if err := u.Verify(); err != nil {
+			return err
+		}
 	}
-	return Update(ctx, u, selectFields)
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, u, cols)
 	//return DB(ctx).Model(u).Select(selectField, selectFields...).Updates(u).Error
 }
 
@@ -150,18 +230,33 @@ func (u *User) UpdateAllFields(ctx *ctx.Context) error {
 	}
 
 	u.UpdateAt = time.Now().Unix()
-	return Update(ctx, u, nil)
+
+	_, err := zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
+		return zorm.UpdateNotZeroValue(ctx, u)
+	})
+	return err
 	//return DB(ctx).Model(u).Select("*").Updates(u).Error
 }
 
 func (u *User) UpdatePassword(ctx *ctx.Context, password, updateBy string) error {
-	finder := zorm.NewUpdateFinder(UserTableName).Append("password=?,update_at=?,update_by=? WHERE id=?", password, time.Now().Unix(), updateBy, u.Id)
+	finder := zorm.NewUpdateFinder(UserTableName).Append("password=?,update_by=?,update_at=? WHERE id=?", password, updateBy, time.Now().Unix(), u.Id)
 	return UpdateFinder(ctx, finder)
 	/*
 		return DB(ctx).Model(u).Updates(map[string]interface{}{
 			"password":  password,
 			"update_at": time.Now().Unix(),
 			"update_by": updateBy,
+		}).Error
+	*/
+}
+
+func UpdateUserLastActiveTime(ctx *ctx.Context, userId int64, lastActiveTime int64) error {
+	finder := zorm.NewUpdateFinder(UserTableName).Append("last_active_time=?,update_at=? WHERE id=?", lastActiveTime, time.Now().Unix(), userId)
+	return UpdateFinder(ctx, finder)
+	/*
+		return DB(ctx).Model(&User{}).Where("id = ?", userId).Updates(map[string]interface{}{
+			"last_active_time": lastActiveTime,
+			"update_at":        time.Now().Unix(),
 		}).Error
 	*/
 }
@@ -177,7 +272,7 @@ func (u *User) Del(ctx *ctx.Context) error {
 	})
 	return err
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("user_id=?", u.Id).Delete(&UserGroupMember{}).Error; err != nil {
 				return err
 			}
@@ -225,7 +320,6 @@ func UserGet(ctx *ctx.Context, where string, args ...interface{}) (*User, error)
 
 	lst[0].RolesLst = strings.Fields(lst[0].Roles)
 	lst[0].Admin = lst[0].IsAdmin()
-	lst[0].ContactsJson.Scan(lst[0].Contacts)
 
 	return lst[0], nil
 }
@@ -269,13 +363,106 @@ func InitRoot(ctx *ctx.Context) {
 	fmt.Println("root password init done")
 }
 
-func PassLogin(ctx *ctx.Context, username, pass string) (*User, error) {
+func reachLoginFailCount(ctx *ctx.Context, redisObj storage.Redis, username string, count int64) (bool, error) {
+	key := "/userlogin/errorcount/" + username
+	val, err := redisObj.Get(ctx.GetContext(), key).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	c, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return false, err
+	}
+
+	return c >= count, nil
+}
+
+func incrLoginFailCount(ctx *ctx.Context, redisObj storage.Redis, username string, seconds int64) {
+	key := "/userlogin/errorcount/" + username
+	duration := time.Duration(seconds) * time.Second
+
+	val, err := redisObj.Get(ctx.GetContext(), key).Result()
+	if err == redis.Nil {
+		redisObj.Set(ctx.GetContext(), key, "1", duration)
+		return
+	}
+
+	if err != nil {
+		logger.Warningf("login_fail_count: failed to get redis value. key:%s, error:%s", key, err)
+		redisObj.Set(ctx.GetContext(), key, "1", duration)
+		return
+	}
+
+	count, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		logger.Warningf("login_fail_count: failed to parse int64. key:%s, error:%s", key, err)
+		redisObj.Set(ctx.GetContext(), key, "1", duration)
+		return
+	}
+
+	count++
+	redisObj.Set(ctx.GetContext(), key, fmt.Sprintf("%d", count), duration)
+}
+
+func PassLogin(ctx *ctx.Context, redis storage.Redis, username, pass string) (*User, error) {
+	// 300 5 meaning: 300 seconds, 5 times
+	val, err := ConfigsGet(ctx, "login_fail_count")
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		needCheck = val != "" // DB 里有配置，说明启用了这个 feature
+		seconds   int64
+		count     int64
+	)
+
+	if needCheck {
+		pair := strings.Fields(val)
+		if len(pair) != 2 {
+			logger.Warningf("login_fail_count config invalid: %s", val)
+			needCheck = false
+		} else {
+			seconds, err = strconv.ParseInt(pair[0], 10, 64)
+			if err != nil {
+				logger.Warningf("login_fail_count seconds invalid: %s", pair[0])
+				needCheck = false
+			}
+
+			count, err = strconv.ParseInt(pair[1], 10, 64)
+			if err != nil {
+				logger.Warningf("login_fail_count count invalid: %s", pair[1])
+				needCheck = false
+			}
+		}
+	}
+
+	if needCheck {
+		reach, err := reachLoginFailCount(ctx, redis, username, count)
+		if err != nil {
+			return nil, err
+		}
+
+		if reach {
+			return nil, fmt.Errorf("reach login fail count")
+		}
+	}
+
 	user, err := UserGetByUsername(ctx, username)
 	if err != nil {
 		return nil, err
 	}
 
 	if user == nil {
+		if needCheck {
+			incrLoginFailCount(ctx, redis, username, seconds)
+		}
+
 		return nil, fmt.Errorf("Username or password invalid")
 	}
 
@@ -283,125 +470,121 @@ func PassLogin(ctx *ctx.Context, username, pass string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof("loginPass: %s", loginPass)
-	logger.Infof("user.Password: %s", user.Password)
 
 	if loginPass != user.Password {
+		if needCheck {
+			incrLoginFailCount(ctx, redis, username, seconds)
+		}
 		return nil, fmt.Errorf("Username or password invalid")
 	}
 
 	return user, nil
 }
 
-func LdapLogin(ctx *ctx.Context, username, pass, roles string, ldap *ldapx.SsoClient) (*User, error) {
-	sr, err := ldap.LdapReq(username, pass)
-	if err != nil {
-		return nil, err
+func UserTotal(ctx *ctx.Context, query string, stime, etime int64) (num int64, err error) {
+	//db := DB(ctx).Model(&User{})
+	finder := zorm.NewSelectFinder(UserTableName, "count(*)").Append("WHERE 1=1")
+	if stime != 0 && etime != 0 {
+		//db = db.Where("last_active_time between ? and ?", stime, etime)
+		finder.Append("and last_active_time between ? and ?", stime, etime)
 	}
 
-	user, err := UserGetByUsername(ctx, username)
-	if err != nil {
-		return nil, err
-	}
-
-	if user == nil {
-		// default user settings
-		user = &User{
-			Username: username,
-			Nickname: username,
-		}
-	}
-
-	// copy attributes from ldap
-	ldap.RLock()
-	attrs := ldap.Attributes
-	coverAttributes := ldap.CoverAttributes
-	ldap.RUnlock()
-
-	if attrs.Nickname != "" {
-		user.Nickname = sr.Entries[0].GetAttributeValue(attrs.Nickname)
-	}
-	if attrs.Email != "" {
-		user.Email = sr.Entries[0].GetAttributeValue(attrs.Email)
-	}
-	if attrs.Phone != "" {
-		user.Phone = strings.Replace(sr.Entries[0].GetAttributeValue(attrs.Phone), " ", "", -1)
-	}
-
-	if user.Roles == "" {
-		user.Roles = roles
-	}
-
-	if user.Id > 0 {
-		if coverAttributes {
-			_, err := zorm.Update(ctx.Ctx, user)
-			//err := DB(ctx).Updates(user).Error
-			if err != nil {
-				return nil, fmt.Errorf("failed to update user:%w", err)
-			}
-		}
-		return user, nil
-	}
-
-	now := time.Now().Unix()
-
-	user.Password = "******"
-	user.Portrait = ""
-
-	// user.Contacts = []byte("{}")
-	user.Contacts = "{}"
-	user.CreateAt = now
-	user.UpdateAt = now
-	user.CreateBy = "ldap"
-	user.UpdateBy = "ldap"
-	_, err = zorm.Insert(ctx.Ctx, user)
-	//err = DB(ctx).Create(user).Error
-	return user, err
-}
-
-func UserTotal(ctx *ctx.Context, query string) (num int64, err error) {
-	finder := zorm.NewSelectFinder(UserTableName, "count(*)")
 	if query != "" {
 		q := "%" + query + "%"
-		finder.Append("WHERE username like ? or nickname like ? or phone like ? or email like ?", q, q, q, q)
+		finder.Append("and (username like ? or nickname like ? or phone like ? or email like ?)", q, q, q, q)
 		//num, err = Count(DB(ctx).Model(&User{}).Where("username like ? or nickname like ? or phone like ? or email like ?", q, q, q, q))
 	} //else {
 	//	num, err = Count(DB(ctx).Model(&User{}))
 	//}
 	num, err = Count(ctx, finder)
+
 	if err != nil {
-		return num, fmt.Errorf("failed to count user:%w", err)
+		return num, errors.WithMessage(err, "failed to count user")
 	}
 
 	return num, nil
 }
 
-func UserGets(ctx *ctx.Context, query string, limit, offset int) ([]User, error) {
-	finder := zorm.NewSelectFinder(UserTableName)
+func UserGets(ctx *ctx.Context, query string, limit, offset int, stime, etime int64,
+	order string, desc bool) ([]User, error) {
+
+	//session := DB(ctx)
+	finder := zorm.NewSelectFinder(UserTableName, "count(*)").Append("WHERE 1=1")
+	if stime != 0 && etime != 0 {
+		//session = session.Where("last_active_time between ? and ?", stime, etime)
+		finder.Append("and last_active_time between ? and ?", stime, etime)
+	}
+
+	if desc {
+		order = order + " desc"
+	} else {
+		order = order + " asc"
+	}
+
+	//session = session.Order(order)
+
+	if query != "" {
+		q := "%" + query + "%"
+		//session = session.Where("username like ? or nickname like ? or phone like ? or email like ?", q, q, q, q)
+		finder.Append("and (username like ? or nickname like ? or phone like ? or email like ?)", q, q, q, q)
+	}
+
+	finder.Append("order by " + order)
 	finder.SelectTotalCount = false
 	page := zorm.NewPage()
 	page.PageSize = limit
 	page.PageNo = offset / limit
-	//session := DB(ctx).Limit(limit).Offset(offset).Order("username")
-	if query != "" {
-		q := "%" + query + "%"
-		finder.Append("WhERE username like ? or nickname like ? or phone like ? or email like ?", q, q, q, q)
-		//session = session.Where("username like ? or nickname like ? or phone like ? or email like ?", q, q, q, q)
-	}
-	finder.Append("order by username asc ")
-
 	users := make([]User, 0)
 	err := zorm.Query(ctx.Ctx, finder, &users, page)
-	//err := session.Find(&users).Error
+	//err := session.Limit(limit).Offset(offset).Find(&users).Error
 	if err != nil {
-		return users, fmt.Errorf("failed to query user:%w", err)
+		return users, errors.WithMessage(err, "failed to query user")
 	}
 
-	for i := 0; i < len(users); i++ {
+	for i := range users {
 		users[i].RolesLst = strings.Fields(users[i].Roles)
 		users[i].Admin = users[i].IsAdmin()
 		users[i].Password = ""
-		users[i].ContactsJson.Scan(users[i].Contacts)
+
+		// query for user group information
+		var userGroupIDs []int64
+		userGroupIDs, err = MyGroupIds(ctx, users[i].Id)
+		if err != nil {
+			return users, errors.WithMessage(err, "failed to query group_ids")
+		}
+
+		f := zorm.NewSelectFinder(UserGroupTableName).Append("WHERE id IN (?)", userGroupIDs)
+		users[i].UserGroupsRes = make([]*UserGroupRes, 0)
+		zorm.Query(ctx.Ctx, f, &users[i].UserGroupsRes, nil)
+		if err != nil {
+			return users, errors.WithMessage(err, "failed to query user_groups")
+		}
+		/*
+			if err = DB(ctx).Table("user_group").Where("id IN (?)", userGroupIDs).
+				Find(&users[i].UserGroupsRes).Error; err != nil {
+				return users, errors.WithMessage(err, "failed to query user_groups")
+			}
+		*/
+
+		// query business group information
+		var busiGroupIDs []int64
+		busiGroupIDs, err = BusiGroupIds(ctx, userGroupIDs)
+		if err != nil {
+			return users, errors.WithMessage(err, "failed to query busi_group_id")
+		}
+
+		f2 := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id IN (?)", busiGroupIDs)
+		users[i].BusiGroupsRes = make([]*BusiGroupRes, 0)
+		zorm.Query(ctx.Ctx, f2, &users[i].BusiGroupsRes, nil)
+		if err != nil {
+			return users, errors.WithMessage(err, "failed to query busi_groups")
+		}
+		/*
+			if err = DB(ctx).Table("busi_group").Where("id IN (?)", busiGroupIDs).
+				Find(&users[i].BusiGroupsRes).Error; err != nil {
+				return users, errors.WithMessage(err, "failed to query busi_groups")
+			}
+		*/
 	}
 
 	return users, nil
@@ -445,6 +628,51 @@ func UserGetsByIds(ctx *ctx.Context, ids []int64) ([]User, error) {
 	return lst, err
 }
 
+func UserGetsBySso(ctx *ctx.Context, sso string) (map[string]*User, error) {
+	//session := DB(ctx).Where("belong=?", sso).Order("username")
+
+	users := make([]User, 0)
+	finder := zorm.NewSelectFinder(UserTableName).Append("WHERE belong=? order by username asc", sso)
+	err := zorm.Query(ctx.Ctx, finder, &users, nil)
+	//err := session.Find(&users).Error
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to query user")
+	}
+
+	usersMap := make(map[string]*User, len(users))
+	for i, user := range users {
+		usersMap[user.Username] = &users[i]
+	}
+
+	return usersMap, nil
+}
+
+func UserDelByIds(ctx *ctx.Context, userIds []int64) error {
+	_, err := zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
+		f1 := zorm.NewDeleteFinder(UserGroupMemberTableName).Append("WHERE user_id in (?)", userIds)
+		_, err := zorm.UpdateFinder(ctx, f1)
+		if err != nil {
+			return nil, err
+		}
+		f2 := zorm.NewDeleteFinder(UserTableName).Append("WHERE id in (?)", userIds)
+		return zorm.UpdateFinder(ctx, f2)
+	})
+	return err
+	/*
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("user_id in ?", userIds).Delete(&UserGroupMember{}).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Where("id in ?", userIds).Delete(&User{}).Error; err != nil {
+				return err
+			}
+
+			return nil
+		})
+	*/
+}
+
 func (u *User) CanModifyUserGroup(ctx *ctx.Context, ug *UserGroup) (bool, error) {
 	// 我是管理员，自然可以
 	if u.IsAdmin() {
@@ -480,7 +708,7 @@ func (u *User) CanDoBusiGroup(ctx *ctx.Context, bg *BusiGroup, permFlag ...strin
 		return false, nil
 	}
 
-	num, err := UserGroupMemberCount(ctx, "user_id = ? and group_id in (?)", u.Id, ugids)
+	num, err := UserGroupMemberCount(ctx, "user_id = ? and group_id in ?", u.Id, ugids)
 	return num > 0, err
 }
 
@@ -497,6 +725,7 @@ func UserStatistics(ctx *ctx.Context) (*Statistics, error) {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=user")
 		return s, err
 	}
+
 	return StatisticsGet(ctx, UserTableName)
 	/*
 		session := DB(ctx).Model(&User{}).Select("count(*) as total", "max(update_at) as last_updated")
@@ -534,15 +763,16 @@ func (u *User) NopriIdents(ctx *ctx.Context, idents []string) ([]string, error) 
 		return idents, nil
 	}
 
-	arr := make([]string, 0)
+	allowedIdents := make([]string, 0)
 	finder := zorm.NewSelectFinder(TargetTableName, "ident").Append("WHERE group_id in (?)", bgids)
-	err = zorm.Query(ctx.Ctx, finder, &arr, nil)
-	//err = DB(ctx).Model(&Target{}).Where("group_id in ?", bgids).Pluck("ident", &arr).Error
+	finder.SelectTotalCount = false
+	err = zorm.Query(ctx.Ctx, finder, &allowedIdents, nil)
+	//err = DB(ctx).Model(&Target{}).Where("group_id in ?", bgids).Pluck("ident", &allowedIdents).Error
 	if err != nil {
 		return []string{}, err
 	}
 
-	return slice.SubString(idents, arr), nil
+	return slice.SubString(idents, allowedIdents), nil
 }
 
 // 我是管理员，返回所有
@@ -556,9 +786,9 @@ func (u *User) BusiGroups(ctx *ctx.Context, limit int, query string, all ...bool
 
 	lst := make([]BusiGroup, 0)
 	if u.IsAdmin() || (len(all) > 0 && all[0]) {
+		//err := session.Where("name like ?", "%"+query+"%").Find(&lst).Error
 		finder.Append("and name like ? order by name asc", "%"+query+"%")
 		err := zorm.Query(ctx.Ctx, finder, &lst, page)
-		//err := session.Where("name like ?", "%"+query+"%").Find(&lst).Error
 		if err != nil {
 			return lst, err
 		}
@@ -585,12 +815,12 @@ func (u *User) BusiGroups(ctx *ctx.Context, limit int, query string, all ...bool
 
 	userGroupIds, err := MyGroupIds(ctx, u.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MyGroupIds:%w", err)
+		return nil, errors.WithMessage(err, "failed to get MyGroupIds")
 	}
 
 	busiGroupIds, err := BusiGroupIds(ctx, userGroupIds)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get BusiGroupIds:%w", err)
+		return nil, errors.WithMessage(err, "failed to get BusiGroupIds")
 	}
 
 	if len(busiGroupIds) == 0 {
@@ -610,7 +840,7 @@ func (u *User) BusiGroups(ctx *ctx.Context, limit int, query string, all ...bool
 			return lst, err
 		}
 
-		if slice.ContainsInt64(busiGroupIds, t.GroupId) {
+		if t != nil && slice.ContainsInt64(busiGroupIds, t.GroupId) {
 			finder := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id=? order by name asc", t.GroupId)
 			finder.SelectTotalCount = false
 			err = zorm.Query(ctx.Ctx, finder, &lst, page)
@@ -656,7 +886,7 @@ func (u *User) UserGroups(ctx *ctx.Context, limit int, query string) ([]UserGrou
 
 	ids, err := MyGroupIds(ctx, u.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get MyGroupIds:%w", err)
+		return nil, errors.WithMessage(err, "failed to get MyGroupIds")
 	}
 
 	if len(ids) > 0 {
@@ -678,49 +908,59 @@ func (u *User) UserGroups(ctx *ctx.Context, limit int, query string) ([]UserGrou
 }
 
 func (u *User) ExtractToken(key string) (string, bool) {
-	// bs, err := u.Contacts.MarshalJSON()
-	// if err != nil {
-	// 	logger.Errorf("ExtractToken: failed to marshal contacts: %v", err)
-	// 	return "", false
-	// }
-	var err error
-	bs := []byte(u.Contacts)
-
-	jsonMap := make(map[string]string, 0)
-	err = json.Unmarshal(bs, &jsonMap)
+	bs, err := u.Contacts.MarshalJSON()
 	if err != nil {
-		logger.Errorf("ExtractToken: failed to unmarshal contacts: %v", err)
+		logger.Errorf("handle_notice: failed to marshal contacts: %v", err)
 		return "", false
 	}
-	value := ""
-	ok := false
+
 	switch key {
 	case Dingtalk:
-		//ret := gjson.GetBytes(bs, DingtalkKey)
-		//return ret.String(), ret.Exists()
-		value, ok = jsonMap[DingtalkKey]
+		ret := gjson.GetBytes(bs, DingtalkKey)
+		return ret.String(), ret.Exists()
 	case Wecom:
-		//ret := gjson.GetBytes(bs, WecomKey)
-		//return ret.String(), ret.Exists()
-		value, ok = jsonMap[WecomKey]
+		ret := gjson.GetBytes(bs, WecomKey)
+		return ret.String(), ret.Exists()
 	case Feishu, FeishuCard:
-		//ret := gjson.GetBytes(bs, FeishuKey)
-		//return ret.String(), ret.Exists()
-		value, ok = jsonMap[FeishuKey]
+		ret := gjson.GetBytes(bs, FeishuKey)
+		return ret.String(), ret.Exists()
 	case Mm:
-		//ret := gjson.GetBytes(bs, MmKey)
-		//return ret.String(), ret.Exists()
-		value, ok = jsonMap[MmKey]
+		ret := gjson.GetBytes(bs, MmKey)
+		return ret.String(), ret.Exists()
 	case Telegram:
-		//ret := gjson.GetBytes(bs, TelegramKey)
-		//return ret.String(), ret.Exists()
-		value, ok = jsonMap[TelegramKey]
+		ret := gjson.GetBytes(bs, TelegramKey)
+		return ret.String(), ret.Exists()
 	case Email:
-		value = u.Email
-		ok = u.Email != ""
-		//return u.Email, u.Email != ""
+		return u.Email, u.Email != ""
 	default:
 		return "", false
 	}
-	return value, ok
+}
+
+func (u *User) FindSameContact(email, phone string) string {
+	if u.Email != "" && u.Email == email {
+		return "email"
+	}
+
+	if u.Phone != "" && u.Phone == phone {
+		return "phone"
+	}
+
+	return ""
+}
+
+// AddUserAndGroups Add a user and add it to multiple groups in a single transaction
+func (u *User) AddUserAndGroups(ctx *ctx.Context, coverTeams bool) error {
+
+	// Try to add a user
+	if err := u.Add(ctx); err != nil {
+		return errors.WithMessage(err, "failed to add user")
+	}
+
+	// Try to add a group for the user
+	if err := UserGroupMemberSyncByUser(ctx, u, coverTeams); err != nil {
+		return errors.WithMessage(err, "failed to add user to groups")
+	}
+
+	return nil
 }

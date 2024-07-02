@@ -3,7 +3,7 @@ package router
 import (
 	"compress/gzip"
 	"encoding/json"
-	"io"
+	"io/ioutil"
 	"sort"
 	"strings"
 	"time"
@@ -27,16 +27,20 @@ func (rt *Router) heartbeat(c *gin.Context) {
 			return
 		}
 		defer r.Close()
-		bs, err = io.ReadAll(r)
+		bs, err = ioutil.ReadAll(r)
 		ginx.Dangerous(err)
 	} else {
 		defer c.Request.Body.Close()
-		bs, err = io.ReadAll(c.Request.Body)
+		bs, err = ioutil.ReadAll(c.Request.Body)
 		ginx.Dangerous(err)
 	}
 
 	err = json.Unmarshal(bs, &req)
 	ginx.Dangerous(err)
+
+	if req.Hostname == "" {
+		ginx.Dangerous("hostname is required", 400)
+	}
 
 	// maybe from pushgw
 	if req.Offset == 0 {
@@ -72,6 +76,9 @@ func (rt *Router) heartbeat(c *gin.Context) {
 		if len(req.GlobalLabels) > 0 {
 			lst := []string{}
 			for k, v := range req.GlobalLabels {
+				if v == "" {
+					continue
+				}
 				lst = append(lst, k+"="+v)
 			}
 			sort.Strings(lst)

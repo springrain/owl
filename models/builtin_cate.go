@@ -25,17 +25,18 @@ func (b *BuiltinCate) Create(c *ctx.Context) error {
 }
 
 // 删除 builtin_cate
-func BuiltinCateDelete(ctx *ctx.Context, name string, userId int64) error {
+func BuiltinCateDelete(c *ctx.Context, name string, userId int64) error {
 	finder := zorm.NewDeleteFinder(BuiltinCateTableName).Append("WHERE name=? and user_id=?", name, userId)
-	return UpdateFinder(ctx, finder)
+	return UpdateFinder(c, finder)
 	//return DB(c).Where("name=? and user_id=?", name, userId).Delete(&BuiltinCate{}).Error
 }
 
 // 根据 userId 获取 builtin_cate
-func BuiltinCateGetByUserId(ctx *ctx.Context, userId int64) (map[string]BuiltinCate, error) {
+func BuiltinCateGetByUserId(c *ctx.Context, userId int64) (map[string]BuiltinCate, error) {
 	builtinCates := make([]BuiltinCate, 0)
 	finder := zorm.NewSelectFinder(BuiltinCateTableName).Append("WHERE user_id=?", userId)
-	err := zorm.Query(ctx.Ctx, finder, &builtinCates, nil)
+	err := zorm.Query(c.Ctx, finder, &builtinCates, nil)
+	//var builtinCates []BuiltinCate
 	//err := DB(c).Where("user_id=?", userId).Find(&builtinCates).Error
 	var builtinCatesMap = make(map[string]BuiltinCate)
 	for _, builtinCate := range builtinCates {

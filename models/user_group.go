@@ -2,15 +2,13 @@ package models
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 
-	"errors"
-
+	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/str"
 )
 
@@ -27,15 +25,13 @@ type UserGroup struct {
 	UpdateAt int64   `json:"update_at" column:"update_at"`
 	UpdateBy string  `json:"update_by" column:"update_by"`
 	UserIds  []int64 `json:"-"`
+	Users    []User  `json:"users"`
 }
 
 func (ug *UserGroup) GetTableName() string {
 	return UserGroupTableName
 }
 
-func (ug *UserGroup) DB2FE() error {
-	return nil
-}
 func (ug *UserGroup) Verify() error {
 	if str.Dangerous(ug.Name) {
 		return errors.New("Name has invalid characters")
@@ -48,11 +44,14 @@ func (ug *UserGroup) Verify() error {
 	return nil
 }
 
-func (ug *UserGroup) Update(ctx *ctx.Context, selectFields ...string) error {
+func (ug *UserGroup) Update(ctx *ctx.Context, selectField string, selectFields ...string) error {
 	if err := ug.Verify(); err != nil {
 		return err
 	}
-	return Update(ctx, ug, selectFields)
+	cols := make([]string, 0)
+	cols = append(cols, selectField)
+	cols = append(cols, selectFields...)
+	return Update(ctx, ug, cols)
 	//return DB(ctx).Model(ug).Select(selectField, selectFields...).Updates(ug).Error
 }
 
@@ -70,7 +69,7 @@ func (ug *UserGroup) Add(ctx *ctx.Context) error {
 
 	num, err := UserGroupCount(ctx, "name=?", ug.Name)
 	if err != nil {
-		return fmt.Errorf("failed to count user-groups:%w", err)
+		return errors.WithMessage(err, "failed to count user-groups")
 	}
 
 	if num > 0 {
@@ -96,7 +95,7 @@ func (ug *UserGroup) Del(ctx *ctx.Context) error {
 	return err
 
 	/*
-		return DB(ctx).Transaction(func(tx *zorm.DBDao) error {
+		return DB(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("group_id=?", ug.Id).Delete(&UserGroupMember{}).Error; err != nil {
 				return err
 			}
@@ -132,7 +131,7 @@ func UserGroupGetById(ctx *ctx.Context, id int64) (*UserGroup, error) {
 }
 
 func UserGroupGetByIds(ctx *ctx.Context, ids []int64) ([]UserGroup, error) {
-	lst := make([]UserGroup, 0)
+	var lst []UserGroup
 	if len(ids) == 0 {
 		return lst, nil
 	}
@@ -182,6 +181,7 @@ func UserGroupStatistics(ctx *ctx.Context) (*Statistics, error) {
 		s, err := poster.GetByUrls[*Statistics](ctx, "/v1/n9e/statistic?name=user_group")
 		return s, err
 	}
+
 	return StatisticsGet(ctx, UserGroupTableName)
 	/*
 		session := DB(ctx).Model(&UserGroup{}).Select("count(*) as total", "max(update_at) as last_updated")
