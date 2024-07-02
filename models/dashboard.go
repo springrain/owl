@@ -132,7 +132,7 @@ func (d *Dashboard) Del(ctx *ctx.Context) error {
 }
 
 func DashboardGet(ctx *ctx.Context, where string, args ...interface{}) (*Dashboard, error) {
-	lst := make([]Dashboard, 0)
+	lst := make([]*Dashboard, 0)
 	finder := zorm.NewSelectFinder(DashboardTableName)
 	AppendWhere(finder, where, args...)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
@@ -147,7 +147,7 @@ func DashboardGet(ctx *ctx.Context, where string, args ...interface{}) (*Dashboa
 
 	lst[0].TagsLst = strings.Fields(lst[0].Tags)
 
-	return &lst[0], nil
+	return lst[0], nil
 }
 
 func DashboardCount(ctx *ctx.Context, where string, args ...interface{}) (num int64, err error) {

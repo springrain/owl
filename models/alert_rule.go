@@ -320,10 +320,7 @@ func (ar *AlertRule) Update(ctx *ctx.Context, arf AlertRule) error {
 	if err != nil {
 		return err
 	}
-	_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-		return zorm.UpdateNotZeroValue(ctx, &arf)
-	})
-	return err
+	return Update(ctx, &arf, nil)
 	//return DB(ctx).Model(ar).Select("*").Updates(arf).Error
 }
 

@@ -132,8 +132,10 @@ func Update(ctx *ctx.Context, entity zorm.IEntityStruct, cols []string) error {
 		//指定仅更新的列
 		if len(cols) > 0 {
 			ctx, _ = zorm.BindContextOnlyUpdateCols(ctx, cols)
+			return zorm.Update(ctx, entity)
 		}
-		return zorm.Update(ctx, entity)
+		//更新非零值
+		return zorm.UpdateNotZeroValue(ctx, entity)
 	})
 	return err
 }

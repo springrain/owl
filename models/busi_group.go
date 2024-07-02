@@ -26,15 +26,16 @@ type BusiGroup struct {
 	UpdateAt    int64                   `json:"update_at" column:"update_at"`
 	UpdateBy    string                  `json:"update_by" column:"update_by"`
 	UserGroups  []UserGroupWithPermFlag `json:"user_groups"`
-	DB          *zorm.DBDao             `json:"-"`
+	//DB          *zorm.DBDao             `json:"-"`
 }
 
-func New(db *zorm.DBDao) *BusiGroup {
-	return &BusiGroup{
-		DB: db,
+/*
+	func New(db *zorm.DBDao) *BusiGroup {
+		return &BusiGroup{
+			DB: db,
+		}
 	}
-}
-
+*/
 type UserGroupWithPermFlag struct {
 	UserGroup *UserGroup `json:"user_group"`
 	PermFlag  string     `json:"perm_flag"`

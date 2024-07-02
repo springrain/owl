@@ -197,7 +197,7 @@ func ConfigsSelectByCkey(ctx *ctx.Context, ckey string) ([]Configs, error) {
 }
 
 func ConfigGet(ctx *ctx.Context, id int64) (*Configs, error) {
-	objs := make([]Configs, 0)
+	objs := make([]*Configs, 0)
 	finder := zorm.NewSelectFinder(ConfigsTableName).Append("WHERE id=?", id)
 	err := zorm.Query(ctx.Ctx, finder, &objs, nil)
 	//err := DB(ctx).Where("id=?", id).Find(&objs).Error
@@ -205,7 +205,7 @@ func ConfigGet(ctx *ctx.Context, id int64) (*Configs, error) {
 	if len(objs) == 0 {
 		return nil, nil
 	}
-	return &objs[0], err
+	return objs[0], err
 }
 
 func ConfigsGets(ctx *ctx.Context, prefix string, limit, offset int) ([]*Configs, error) {

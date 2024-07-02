@@ -340,7 +340,6 @@ func (s *AlertSubscribe) Update(ctx *ctx.Context, selectField string, selectFiel
 		return err
 	}
 
-	//---------------------------------------------------------------------//
 	cols := make([]string, 0)
 	cols = append(cols, selectField)
 	cols = append(cols, selectFields...)

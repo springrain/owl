@@ -38,9 +38,8 @@ func (e *AlertingEngines) UpdateDatasourceId(ctx *ctx.Context, id int64) error {
 	}
 
 	e.DatasourceId = id
-	cols := make([]string, 0)
-	cols = append(cols, "datasource_id")
-	return Update(ctx, e, cols)
+
+	return UpdateColumn(ctx, AlertingEnginesTableName, e.Id, "datasource_id", e.DatasourceId)
 	//return DB(ctx).Model(e).Select("datasource_id").Updates(e).Error
 }
 

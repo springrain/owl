@@ -1,7 +1,6 @@
 package models
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -239,11 +238,7 @@ func (m *AlertMute) Update(ctx *ctx.Context, arm AlertMute) error {
 		return err
 	}
 
-	_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-		return zorm.UpdateNotZeroValue(ctx, &arm)
-	})
-	return err
-
+	return Update(ctx, &arm, nil)
 	//return DB(ctx).Model(m).Select("*").Updates(arm).Error
 }
 

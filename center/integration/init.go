@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"path"
 	"strings"
@@ -88,9 +87,8 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 				old.UpdatedAt = now
 				old.Readme = component.Readme
 				old.UpdatedBy = SYSTEM
-				_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-					return zorm.UpdateNotZeroValue(ctx, old)
-				})
+
+				err = models.Update(ctx, old, nil)
 				//err = models.DB(ctx).Model(old).Select("*").Updates(old).Error
 				if err != nil {
 					logger.Warning("update builtin component fail ", old, err)
@@ -178,9 +176,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 						old.Content = string(content)
 						old.Name = alert.Name
 						old.Tags = alert.AppendTags
-						_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-							return zorm.UpdateNotZeroValue(ctx, old)
-						})
+						err = models.Update(ctx, old, nil)
 						//err = models.DB(ctx).Model(old).Select("*").Updates(old).Error
 						if err != nil {
 							logger.Warningf("update builtin alert:%+v fail %v", builtinAlert, err)
@@ -271,9 +267,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 					old.Content = string(content)
 					old.Name = dashboard.Name
 					old.Tags = dashboard.Tags
-					_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-						return zorm.UpdateNotZeroValue(ctx, old)
-					})
+					err = models.Update(ctx, old, nil)
 					//err = models.DB(ctx).Model(old).Select("*").Updates(old).Error
 					if err != nil {
 						logger.Warningf("update builtin alert:%+v fail %v", builtinDashboard, err)
@@ -333,9 +327,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 						old.Note = metric.Note
 						old.Lang = metric.Lang
 						old.Expression = metric.Expression
-						_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-							return zorm.UpdateNotZeroValue(ctx, old)
-						})
+						err = models.Update(ctx, old, nil)
 						//err = models.DB(ctx).Model(old).Select("*").Updates(old).Error
 						if err != nil {
 							logger.Warningf("update builtin metric:%+v fail %v", metric, err)

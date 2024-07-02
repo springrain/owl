@@ -231,10 +231,7 @@ func (u *User) UpdateAllFields(ctx *ctx.Context) error {
 
 	u.UpdateAt = time.Now().Unix()
 
-	_, err := zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
-		return zorm.UpdateNotZeroValue(ctx, u)
-	})
-	return err
+	return Update(ctx, u, nil)
 	//return DB(ctx).Model(u).Select("*").Updates(u).Error
 }
 
