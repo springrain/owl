@@ -3,6 +3,7 @@ module github.com/ccfos/nightingale/v6
 go 1.22
 
 require (
+	gitee.com/chunanyong/dm v1.8.15
 	gitee.com/chunanyong/zorm v1.7.6
 	github.com/BurntSushi/toml v1.4.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.26.0
