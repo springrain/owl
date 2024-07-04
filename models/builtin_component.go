@@ -15,7 +15,7 @@ const BuiltinComponentTableName = "builtin_components"
 type BuiltinComponent struct {
 	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
-	ID        uint64 `json:"id" column:"id"`
+	ID        int64  `json:"id" column:"id"`
 	Ident     string `json:"ident" column:"ident"`
 	Logo      string `json:"logo" column:"logo"`
 	Readme    string `json:"readme" column:"readme"`
