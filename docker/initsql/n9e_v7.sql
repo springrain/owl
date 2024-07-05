@@ -1725,6 +1725,7 @@ CREATE TABLE `recording_rule`  (
   `disabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '0:enabled 1:disabled',
   `prom_ql` varchar(8192) NOT NULL COMMENT 'promql',
   `prom_eval_interval` int NOT NULL COMMENT 'evaluate interval',
+  `cron_pattern` varchar(255) default '' comment 'cron pattern',
   `append_tags` varchar(255) NULL DEFAULT '' COMMENT 'split by space: service=n9e mod=api',
   `query_configs` text NOT NULL,
   `create_at` bigint NULL DEFAULT 0,

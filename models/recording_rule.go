@@ -34,13 +34,13 @@ type RecordingRule struct {
 	QueryConfigs      string        `json:"-" column:"query_configs"`                       // query_configs
 	QueryConfigsJson  []QueryConfig `json:"query_configs"`                                  // query_configs for fe
 	PromEvalInterval  int           `json:"prom_eval_interval" column:"prom_eval_interval"` // unit:s
-	AppendTags        string        `json:"-" column:"append_tags"`                         // split by space: service=n9e mod=api
-	AppendTagsJSON    []string      `json:"append_tags"`                                    // for fe
-	Note              string        `json:"note" column:"note"`                             // note
+	CronPattern       string        `json:"cron_pattern" column:"cron_pattern"`
+	AppendTags        string        `json:"-" column:"append_tags"` // split by space: service=n9e mod=api
+	AppendTagsJSON    []string      `json:"append_tags"`            // for fe
+	Note              string        `json:"note" column:"note"`     // note
 	CreateAt          int64         `json:"create_at" column:"create_at"`
 	CreateBy          string        `json:"create_by" column:"create_by"`
 	UpdateAt          int64         `json:"update_at" column:"update_at"`
-	UpdateBy          string        `json:"update_by" column:"update_by"`
 }
 
 type QueryConfig struct {
@@ -75,8 +75,12 @@ func (re *RecordingRule) DB2FE() error {
 	json.Unmarshal([]byte(re.DatasourceIds), &re.DatasourceIdsJson)
 
 	json.Unmarshal([]byte(re.QueryConfigs), &re.QueryConfigsJson)
-	return nil
 
+	if re.CronPattern == "" && re.PromEvalInterval != 0 {
+		re.CronPattern = fmt.Sprintf("@every %ds", re.PromEvalInterval)
+	}
+
+	return nil
 }
 
 func (re *RecordingRule) Verify() error {
@@ -104,6 +108,10 @@ func (re *RecordingRule) Verify() error {
 
 	if re.PromEvalInterval <= 0 {
 		re.PromEvalInterval = 60
+	}
+
+	if re.CronPattern == "" {
+		re.CronPattern = "@every 60s"
 	}
 
 	re.AppendTags = strings.TrimSpace(re.AppendTags)
