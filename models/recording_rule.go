@@ -41,6 +41,7 @@ type RecordingRule struct {
 	CreateAt          int64         `json:"create_at" column:"create_at"`
 	CreateBy          string        `json:"create_by" column:"create_by"`
 	UpdateAt          int64         `json:"update_at" column:"update_at"`
+	UpdateBy          string        `json:"update_by" column:"update_by"`
 }
 
 type QueryConfig struct {
