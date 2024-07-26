@@ -11,6 +11,7 @@ import (
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+	"github.com/ccfos/nightingale/v6/pushgw/pconf"
 
 	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/logger"
@@ -30,60 +31,61 @@ const AlertRuleTableName = "alert_rule"
 
 type AlertRule struct {
 	zorm.EntityStruct
-	Id                    int64             `json:"id" column:"id"`
-	GroupId               int64             `json:"group_id" column:"group_id"`                     // busi group id
-	Cate                  string            `json:"cate" column:"cate"`                             // alert rule cate (prometheus|elasticsearch)
-	DatasourceIds         string            `json:"-" column:"datasource_ids"`                      // datasource ids
-	DatasourceIdsJson     []int64           `json:"datasource_ids"`                                 // for fe
-	Cluster               string            `json:"cluster" column:"cluster"`                       // take effect by clusters, seperated by space
-	Name                  string            `json:"name" column:"name"`                             // rule name
-	Note                  string            `json:"note" column:"note"`                             // will sent in notify
-	Prod                  string            `json:"prod" column:"prod"`                             // product empty means n9e
-	Algorithm             string            `json:"algorithm" column:"algorithm"`                   // algorithm (''|holtwinters), empty means threshold
-	AlgoParams            string            `json:"-" column:"algo_params"`                         // params algorithm need
-	AlgoParamsJson        interface{}       `json:"algo_params"`                                    // for fe
-	Delay                 int               `json:"delay" column:"delay"`                           // Time (in seconds) to delay evaluation
-	Severity              int               `json:"severity" column:"severity"`                     // 1: Emergency 2: Warning 3: Notice
-	Severities            []int             `json:"severities"`                                     // 1: Emergency 2: Warning 3: Notice
-	Disabled              int               `json:"disabled" column:"disabled"`                     // 0: enabled, 1: disabled
-	PromForDuration       int               `json:"prom_for_duration" column:"prom_for_duration"`   // prometheus for, unit:s
-	PromQl                string            `json:"prom_ql" column:"prom_ql"`                       // just one ql
-	RuleConfig            string            `json:"-" column:"rule_config"`                         // rule config
-	RuleConfigJson        interface{}       `json:"rule_config"`                                    // rule config for fe
-	PromEvalInterval      int               `json:"prom_eval_interval" column:"prom_eval_interval"` // unit:s
-	EnableStime           string            `json:"-" column:"enable_stime"`                        // split by space: "00:00 10:00 12:00"
-	EnableStimeJSON       string            `json:"enable_stime"`                                   // for fe
-	EnableStimesJSON      []string          `json:"enable_stimes"`                                  // for fe
-	EnableEtime           string            `json:"-" column:"enable_etime"`                        // split by space: "00:00 10:00 12:00"
-	EnableEtimeJSON       string            `json:"enable_etime"`                                   // for fe
-	EnableEtimesJSON      []string          `json:"enable_etimes"`                                  // for fe
-	EnableDaysOfWeek      string            `json:"-" column:"enable_days_of_week"`                 // eg: "0 1 2 3 4 5 6 ; 0 1 2"
-	EnableDaysOfWeekJSON  []string          `json:"enable_days_of_week"`                            // for fe
-	EnableDaysOfWeeksJSON [][]string        `json:"enable_days_of_weeks"`                           // for fe
-	EnableInBG            int               `json:"enable_in_bg" column:"enable_in_bg"`             // 0: global 1: enable one busi-group
-	NotifyRecovered       int               `json:"notify_recovered" column:"notify_recovered"`     // whether notify when recovery
-	NotifyChannels        string            `json:"-" column:"notify_channels"`                     // split by space: sms voice email dingtalk wecom
-	NotifyChannelsJSON    []string          `json:"notify_channels"`                                // for fe
-	NotifyGroups          string            `json:"-" column:"notify_groups"`                       // split by space: 233 43
-	NotifyGroupsObj       []UserGroup       `json:"notify_groups_obj"`                              // for fe
-	NotifyGroupsJSON      []string          `json:"notify_groups"`                                  // for fe
-	NotifyRepeatStep      int               `json:"notify_repeat_step" column:"notify_repeat_step"` // notify repeat interval, unit: min
-	NotifyMaxNumber       int               `json:"notify_max_number" column:"notify_max_number"`   // notify: max number
-	RecoverDuration       int64             `json:"recover_duration" column:"recover_duration"`     // unit: s
-	Callbacks             string            `json:"-" column:"callbacks"`                           // split by space: http://a.com/api/x http://a.com/api/y'
-	CallbacksJSON         []string          `json:"callbacks"`                                      // for fe
-	RunbookUrl            string            `json:"runbook_url" column:"runbook_url"`               // sop url
-	AppendTags            string            `json:"-" column:"append_tags"`                         // split by space: service=n9e mod=api
-	AppendTagsJSON        []string          `json:"append_tags"`                                    // for fe
-	Annotations           string            `json:"-" column:"annotations"`                         //
-	AnnotationsJSON       map[string]string `json:"annotations"`                                    // for fe
-	ExtraConfig           string            `json:"-" column:"extra_config"`                        // extra config
-	ExtraConfigJSON       interface{}       `json:"extra_config"`                                   // for fe
-	CreateAt              int64             `json:"create_at" column:"create_at"`
-	CreateBy              string            `json:"create_by" column:"create_by"`
-	UpdateAt              int64             `json:"update_at" column:"update_at"`
-	UpdateBy              string            `json:"update_by" column:"update_by"`
-	UUID                  int64             `json:"uuid"` // tpl identifier
+	Id                    int64                  `json:"id" column:"id"`
+	GroupId               int64                  `json:"group_id" column:"group_id"`                     // busi group id
+	Cate                  string                 `json:"cate" column:"cate"`                             // alert rule cate (prometheus|elasticsearch)
+	DatasourceIds         string                 `json:"-" column:"datasource_ids"`                      // datasource ids
+	DatasourceIdsJson     []int64                `json:"datasource_ids"`                                 // for fe
+	Cluster               string                 `json:"cluster" column:"cluster"`                       // take effect by clusters, seperated by space
+	Name                  string                 `json:"name" column:"name"`                             // rule name
+	Note                  string                 `json:"note" column:"note"`                             // will sent in notify
+	Prod                  string                 `json:"prod" column:"prod"`                             // product empty means n9e
+	Algorithm             string                 `json:"algorithm" column:"algorithm"`                   // algorithm (''|holtwinters), empty means threshold
+	AlgoParams            string                 `json:"-" column:"algo_params"`                         // params algorithm need
+	AlgoParamsJson        interface{}            `json:"algo_params"`                                    // for fe
+	Delay                 int                    `json:"delay" column:"delay"`                           // Time (in seconds) to delay evaluation
+	Severity              int                    `json:"severity" column:"severity"`                     // 1: Emergency 2: Warning 3: Notice
+	Severities            []int                  `json:"severities"`                                     // 1: Emergency 2: Warning 3: Notice
+	Disabled              int                    `json:"disabled" column:"disabled"`                     // 0: enabled, 1: disabled
+	PromForDuration       int                    `json:"prom_for_duration" column:"prom_for_duration"`   // prometheus for, unit:s
+	PromQl                string                 `json:"prom_ql" column:"prom_ql"`                       // just one ql
+	RuleConfig            string                 `json:"-" column:"rule_config"`                         // rule config
+	RuleConfigJson        interface{}            `json:"rule_config"`                                    // rule config for fe
+	EventRelabelConfig    []*pconf.RelabelConfig `json:"event_relabel_config"`                           // event relabel config
+	PromEvalInterval      int                    `json:"prom_eval_interval" column:"prom_eval_interval"` // unit:s
+	EnableStime           string                 `json:"-" column:"enable_stime"`                        // split by space: "00:00 10:00 12:00"
+	EnableStimeJSON       string                 `json:"enable_stime"`                                   // for fe
+	EnableStimesJSON      []string               `json:"enable_stimes"`                                  // for fe
+	EnableEtime           string                 `json:"-" column:"enable_etime"`                        // split by space: "00:00 10:00 12:00"
+	EnableEtimeJSON       string                 `json:"enable_etime"`                                   // for fe
+	EnableEtimesJSON      []string               `json:"enable_etimes"`                                  // for fe
+	EnableDaysOfWeek      string                 `json:"-" column:"enable_days_of_week"`                 // eg: "0 1 2 3 4 5 6 ; 0 1 2"
+	EnableDaysOfWeekJSON  []string               `json:"enable_days_of_week"`                            // for fe
+	EnableDaysOfWeeksJSON [][]string             `json:"enable_days_of_weeks"`                           // for fe
+	EnableInBG            int                    `json:"enable_in_bg" column:"enable_in_bg"`             // 0: global 1: enable one busi-group
+	NotifyRecovered       int                    `json:"notify_recovered" column:"notify_recovered"`     // whether notify when recovery
+	NotifyChannels        string                 `json:"-" column:"notify_channels"`                     // split by space: sms voice email dingtalk wecom
+	NotifyChannelsJSON    []string               `json:"notify_channels"`                                // for fe
+	NotifyGroups          string                 `json:"-" column:"notify_groups"`                       // split by space: 233 43
+	NotifyGroupsObj       []UserGroup            `json:"notify_groups_obj"`                              // for fe
+	NotifyGroupsJSON      []string               `json:"notify_groups"`                                  // for fe
+	NotifyRepeatStep      int                    `json:"notify_repeat_step" column:"notify_repeat_step"` // notify repeat interval, unit: min
+	NotifyMaxNumber       int                    `json:"notify_max_number" column:"notify_max_number"`   // notify: max number
+	RecoverDuration       int64                  `json:"recover_duration" column:"recover_duration"`     // unit: s
+	Callbacks             string                 `json:"-" column:"callbacks"`                           // split by space: http://a.com/api/x http://a.com/api/y'
+	CallbacksJSON         []string               `json:"callbacks"`                                      // for fe
+	RunbookUrl            string                 `json:"runbook_url" column:"runbook_url"`               // sop url
+	AppendTags            string                 `json:"-" column:"append_tags"`                         // split by space: service=n9e mod=api
+	AppendTagsJSON        []string               `json:"append_tags"`                                    // for fe
+	Annotations           string                 `json:"-" column:"annotations"`                         //
+	AnnotationsJSON       map[string]string      `json:"annotations"`                                    // for fe
+	ExtraConfig           string                 `json:"-" column:"extra_config"`                        // extra config
+	ExtraConfigJSON       interface{}            `json:"extra_config"`                                   // for fe
+	CreateAt              int64                  `json:"create_at" column:"create_at"`
+	CreateBy              string                 `json:"create_by" column:"create_by"`
+	UpdateAt              int64                  `json:"update_at" column:"update_at"`
+	UpdateBy              string                 `json:"update_by" column:"update_by"`
+	UUID                  int64                  `json:"uuid"` // tpl identifier
 }
 
 type PromRuleConfig struct {
@@ -634,6 +636,13 @@ func (ar *AlertRule) DB2FE() error {
 	json.Unmarshal([]byte(ar.RuleConfig), &ar.RuleConfigJson)
 	json.Unmarshal([]byte(ar.Annotations), &ar.AnnotationsJSON)
 	json.Unmarshal([]byte(ar.ExtraConfig), &ar.ExtraConfigJSON)
+
+	// 解析 RuleConfig 字段
+	var ruleConfig struct {
+		EventRelabelConfig []*pconf.RelabelConfig `json:"event_relabel_config"`
+	}
+	json.Unmarshal([]byte(ar.RuleConfig), &ruleConfig)
+	ar.EventRelabelConfig = ruleConfig.EventRelabelConfig
 
 	err := ar.FillDatasourceIds()
 	return err

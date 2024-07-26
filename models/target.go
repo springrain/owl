@@ -93,32 +93,55 @@ func TargetDel(ctx *ctx.Context, idents []string) error {
 	//return DB(ctx).Where("ident in ?", idents).Delete(new(Target)).Error
 }
 
-func buildTargetWhere(ctx *ctx.Context, selectField string, bgids []int64, dsIds []int64, query string, downtime int64) *zorm.Finder {
+type BuildTargetWhereOption func(finder *zorm.Finder) *zorm.Finder
+
+func BuildTargetWhereWithBgids(bgids []int64) BuildTargetWhereOption {
+	return func(finder *zorm.Finder) *zorm.Finder {
+		if len(bgids) > 0 {
+			finder = finder.Append(" and group_id in (?)", bgids)
+		}
+		return finder
+	}
+}
+
+func BuildTargetWhereWithDsIds(dsIds []int64) BuildTargetWhereOption {
+	return func(finder *zorm.Finder) *zorm.Finder {
+		if len(dsIds) > 0 {
+			finder = finder.Append(" and datasource_id in (?)", dsIds)
+		}
+		return finder
+	}
+}
+
+func BuildTargetWhereWithQuery(query string) BuildTargetWhereOption {
+	return func(finder *zorm.Finder) *zorm.Finder {
+		if query != "" {
+			arr := strings.Fields(query)
+			for i := 0; i < len(arr); i++ {
+				q := "%" + arr[i] + "%"
+				finder = finder.Append(" and (ident like ? or note like ? or tags like ?)", q, q, q)
+			}
+		}
+		return finder
+	}
+}
+
+func BuildTargetWhereWithDowntime(downtime int64) BuildTargetWhereOption {
+	return func(finder *zorm.Finder) *zorm.Finder {
+		if downtime > 0 {
+			finder = finder.Append(" and update_at < ?", time.Now().Unix()-downtime)
+		}
+		return finder
+	}
+}
+
+func buildTargetWhere(ctx *ctx.Context, selectField string, options ...BuildTargetWhereOption) *zorm.Finder {
 	finder := zorm.NewSelectFinder(TargetTableName, selectField).Append("WHERE 1=1")
 	//session := DB(ctx).Model(&Target{})
 	finder.SelectTotalCount = false
-	if len(bgids) > 0 {
-		//session = session.Where("group_id in (?)", bgids)
-		finder.Append("and group_id in (?)", bgids)
-	}
 
-	if len(dsIds) > 0 {
-		//session = session.Where("datasource_id in (?)", dsIds)
-		finder.Append("and datasource_id in (?)", dsIds)
-	}
-
-	if downtime > 0 {
-		//session = session.Where("update_at < ?", time.Now().Unix()-downtime)
-		finder.Append("and update_at < ?", time.Now().Unix()-downtime)
-	}
-
-	if query != "" {
-		arr := strings.Fields(query)
-		for i := 0; i < len(arr); i++ {
-			q := "%" + arr[i] + "%"
-			//session = session.Where("ident like ? or note like ? or tags like ?", q, q, q)
-			finder.Append("and (ident like ? or note like ? or tags like ?)", q, q, q)
-		}
+	for _, opt := range options {
+		finder = opt(finder)
 	}
 
 	return finder
@@ -130,26 +153,25 @@ func TargetTotalCount(ctx *ctx.Context) (int64, error) {
 	//return Count(DB(ctx).Model(new(Target)))
 }
 
-func TargetTotal(ctx *ctx.Context, bgids []int64, dsIds []int64, query string, downtime int64) (int64, error) {
-	finder := buildTargetWhere(ctx, "count(*)", bgids, dsIds, query, downtime)
+func TargetTotal(ctx *ctx.Context, options ...BuildTargetWhereOption) (int64, error) {
+	finder := buildTargetWhere(ctx, "count(*)", options...)
 	return Count(ctx, finder)
 	//return Count(buildTargetWhere(ctx, bgids, dsIds, query, downtime))
 }
 
-func TargetGets(ctx *ctx.Context, bgids []int64, dsIds []int64, query string, downtime int64, limit, offset int) ([]*Target, error) {
+func TargetGets(ctx *ctx.Context, limit, offset int, order string, desc bool, options ...BuildTargetWhereOption) ([]*Target, error) {
 	lst := make([]*Target, 0)
-	finder := buildTargetWhere(ctx, "*", bgids, dsIds, query, downtime)
-	finder.Append("order by ident asc ")
+	if desc {
+		order += " desc"
+	} else {
+		order += " asc"
+	}
+	finder := buildTargetWhere(ctx, "*", options...)
+	finder.Append(order)
 	page := zorm.NewPage()
 	page.PageSize = limit
 	page.PageNo = offset / limit
 	err := zorm.Query(ctx.Ctx, finder, &lst, page)
-	//err := buildTargetWhere(ctx, bgids, dsIds, query, downtime).Order("ident").Limit(limit).Offset(offset).Find(&lst).Error
-	if err == nil {
-		for i := 0; i < len(lst); i++ {
-			lst[i].TagsJSON = strings.Fields(lst[i].Tags)
-		}
-	}
 	return lst, err
 }
 

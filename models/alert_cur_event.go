@@ -56,6 +56,8 @@ type AlertCurEvent struct {
 	Tags               string            `json:"-" column:"tags"`                                // for db
 	TagsJSON           []string          `json:"tags"`                                           // for fe
 	TagsMap            map[string]string `json:"tags_map"`                                       // for internal usage
+	OriginalTags       string            `json:"-" column:"original_tags"`                       // for db
+	OriginalTagsJSON   []string          `json:"original_tags"`                                  // for fe
 	Annotations        string            `json:"-" column:"annotations"`                         //
 	AnnotationsJSON    map[string]string `json:"annotations"`                                    // for fe
 	IsRecovered        bool              `json:"is_recovered"`                                   // for notify.py
@@ -293,6 +295,7 @@ func (e *AlertCurEvent) ToHis(ctx *ctx.Context) *AlertHisEvent {
 		TriggerTime:      e.TriggerTime,
 		TriggerValue:     e.TriggerValue,
 		Tags:             e.Tags,
+		OriginalTags:     e.OriginalTags,
 		RecoverTime:      recoverTime,
 		LastEvalTime:     e.LastEvalTime,
 		NotifyCurNumber:  e.NotifyCurNumber,
@@ -305,6 +308,7 @@ func (e *AlertCurEvent) DB2FE() error {
 	e.NotifyGroupsJSON = strings.Fields(e.NotifyGroups)
 	e.CallbacksJSON = strings.Fields(e.Callbacks)
 	e.TagsJSON = strings.Split(e.Tags, ",,")
+	e.OriginalTagsJSON = strings.Split(e.OriginalTags, ",,")
 	json.Unmarshal([]byte(e.Annotations), &e.AnnotationsJSON)
 	json.Unmarshal([]byte(e.RuleConfig), &e.RuleConfigJson)
 	return nil
@@ -315,6 +319,7 @@ func (e *AlertCurEvent) FE2DB() {
 	e.NotifyGroups = strings.Join(e.NotifyGroupsJSON, " ")
 	e.Callbacks = strings.Join(e.CallbacksJSON, " ")
 	e.Tags = strings.Join(e.TagsJSON, ",,")
+	e.OriginalTags = strings.Join(e.OriginalTagsJSON, ",,")
 	b, _ := json.Marshal(e.AnnotationsJSON)
 	e.Annotations = string(b)
 

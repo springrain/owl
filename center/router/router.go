@@ -13,6 +13,7 @@ import (
 	"github.com/ccfos/nightingale/v6/center/cstats"
 	"github.com/ccfos/nightingale/v6/center/metas"
 	"github.com/ccfos/nightingale/v6/center/sso"
+	"github.com/ccfos/nightingale/v6/conf"
 	_ "github.com/ccfos/nightingale/v6/front/statik"
 	"github.com/ccfos/nightingale/v6/memsto"
 	"github.com/ccfos/nightingale/v6/pkg/aop"
@@ -34,6 +35,7 @@ import (
 type Router struct {
 	HTTP              httpx.Config
 	Center            cconf.Center
+	Ibex              conf.Ibex
 	Alert             aconf.Alert
 	Operations        cconf.Operation
 	DatasourceCache   *memsto.DatasourceCacheType
@@ -48,9 +50,10 @@ type Router struct {
 	UserCache         *memsto.UserCacheType
 	UserGroupCache    *memsto.UserGroupCacheType
 	Ctx               *ctx.Context
+	HeartbeatHook     HeartbeatHookFunc
 }
 
-func New(httpConfig httpx.Config, center cconf.Center, alert aconf.Alert, operations cconf.Operation, ds *memsto.DatasourceCacheType, ncc *memsto.NotifyConfigCacheType, pc *prom.PromClientMap, tdendgineClients *tdengine.TdengineClientMap, redis storage.Redis, sso *sso.SsoClient, ctx *ctx.Context, metaSet *metas.Set, idents *idents.Set, tc *memsto.TargetCacheType, uc *memsto.UserCacheType, ugc *memsto.UserGroupCacheType) *Router {
+func New(httpConfig httpx.Config, center cconf.Center, alert aconf.Alert, ibex conf.Ibex, operations cconf.Operation, ds *memsto.DatasourceCacheType, ncc *memsto.NotifyConfigCacheType, pc *prom.PromClientMap, tdendgineClients *tdengine.TdengineClientMap, redis storage.Redis, sso *sso.SsoClient, ctx *ctx.Context, metaSet *metas.Set, idents *idents.Set, tc *memsto.TargetCacheType, uc *memsto.UserCacheType, ugc *memsto.UserGroupCacheType) *Router {
 	return &Router{
 		HTTP:              httpConfig,
 		Center:            center,
@@ -68,6 +71,7 @@ func New(httpConfig httpx.Config, center cconf.Center, alert aconf.Alert, operat
 		UserCache:         uc,
 		UserGroupCache:    ugc,
 		Ctx:               ctx,
+		HeartbeatHook:     func(ident string) map[string]interface{} { return nil },
 	}
 }
 
@@ -91,7 +95,9 @@ func languageDetector(i18NHeaderKey string) gin.HandlerFunc {
 		if headerKey != "" {
 			lang := c.GetHeader(headerKey)
 			if lang != "" {
-				if strings.HasPrefix(lang, "zh") {
+				if strings.HasPrefix(lang, "zh_HK") {
+					c.Request.Header.Set("X-Language", "zh_HK")
+				} else if strings.HasPrefix(lang, "zh") {
 					c.Request.Header.Set("X-Language", "zh_CN")
 				} else if strings.HasPrefix(lang, "en") {
 					c.Request.Header.Set("X-Language", "en")
@@ -112,7 +118,7 @@ func (rt *Router) configNoRoute(r *gin.Engine, fs *http.FileSystem) {
 		suffix := arr[len(arr)-1]
 
 		switch suffix {
-		case "png", "jpeg", "jpg", "svg", "ico", "gif", "css", "js", "html", "htm", "gz", "zip", "map", "ttf":
+		case "png", "jpeg", "jpg", "svg", "ico", "gif", "css", "js", "html", "htm", "gz", "zip", "map", "ttf", "md":
 			if !rt.Center.UseFileAssets {
 				c.FileFromFS(c.Request.URL.Path, *fs)
 			} else {
@@ -312,7 +318,9 @@ func (rt *Router) Config(r *gin.Engine) {
 		pages.PUT("/busi-group/:id/alert-rules/fields", rt.auth(), rt.user(), rt.perm("/alert-rules/put"), rt.bgrw(), rt.alertRulePutFields)
 		pages.PUT("/busi-group/:id/alert-rule/:arid", rt.auth(), rt.user(), rt.perm("/alert-rules/put"), rt.alertRulePutByFE)
 		pages.GET("/alert-rule/:arid", rt.auth(), rt.user(), rt.perm("/alert-rules"), rt.alertRuleGet)
+		pages.GET("/alert-rule/:arid/pure", rt.auth(), rt.user(), rt.perm("/alert-rules"), rt.alertRulePureGet)
 		pages.PUT("/busi-group/alert-rule/validate", rt.auth(), rt.user(), rt.perm("/alert-rules/put"), rt.alertRuleValidation)
+		pages.POST("/relabel-test", rt.auth(), rt.user(), rt.relabelTest)
 
 		pages.GET("/busi-groups/recording-rules", rt.auth(), rt.user(), rt.perm("/recording-rules"), rt.recordingRuleGetsByGids)
 		pages.GET("/busi-group/:id/recording-rules", rt.auth(), rt.user(), rt.perm("/recording-rules"), rt.recordingRuleGets)
@@ -372,8 +380,8 @@ func (rt *Router) Config(r *gin.Engine) {
 		pages.GET("/busi-group/:id/tasks", rt.auth(), rt.user(), rt.perm("/job-tasks"), rt.bgro(), rt.taskGets)
 		pages.POST("/busi-group/:id/tasks", rt.auth(), rt.user(), rt.perm("/job-tasks/add"), rt.bgrw(), rt.taskAdd)
 
-		pages.GET("/servers", rt.auth(), rt.user(), rt.perm("/help/servers"), rt.serversGet)
-		pages.GET("/server-clusters", rt.auth(), rt.user(), rt.perm("/help/servers"), rt.serverClustersGet)
+		pages.GET("/servers", rt.auth(), rt.user(), rt.serversGet)
+		pages.GET("/server-clusters", rt.auth(), rt.user(), rt.serverClustersGet)
 
 		pages.POST("/datasource/list", rt.auth(), rt.user(), rt.datasourceList)
 		pages.POST("/datasource/plugin/list", rt.auth(), rt.pluginList)
