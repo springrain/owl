@@ -31,26 +31,32 @@ const (
 	Telegram     = "telegram"
 	Email        = "email"
 	EmailSubject = "mailsubject"
+	Lark         = "lark"
+	LarkCard     = "larkcard"
 
 	DingtalkKey = "dingtalk_robot_token"
 	WecomKey    = "wecom_robot_token"
 	FeishuKey   = "feishu_robot_token"
 	MmKey       = "mm_webhook_url"
 	TelegramKey = "telegram_robot_token"
+	LarkKey     = "lark_robot_token"
 
 	DingtalkDomain = "oapi.dingtalk.com"
 	WecomDomain    = "qyapi.weixin.qq.com"
 	FeishuDomain   = "open.feishu.cn"
+	LarkDomain     = "open.larksuite.com"
 
 	// FeishuCardDomain The domain name of the feishu card is the same as the feishu,distinguished by the parameter
 	FeishuCardDomain = "open.feishu.cn?card=1"
+	LarkCardDomain   = "open.larksuite.com?card=1"
 	TelegramDomain   = "api.telegram.org"
 	IbexDomain       = "ibex"
 	DefaultDomain    = "default"
 )
 
 var (
-	DefaultChannels = []string{Dingtalk, Wecom, Feishu, Mm, Telegram, Email, FeishuCard}
+	DefaultChannels = []string{Dingtalk, Wecom, Feishu, Mm, Telegram, Email, FeishuCard, Lark, LarkCard}
+	DefaultContacts = []string{DingtalkKey, WecomKey, FeishuKey, MmKey, TelegramKey, LarkKey}
 )
 
 const UserTableName = "users"
@@ -321,6 +327,37 @@ func UserGet(ctx *ctx.Context, where string, args ...interface{}) (*User, error)
 	return lst[0], nil
 }
 
+func UsersGet(ctx *ctx.Context, where string, args ...interface{}) ([]*User, error) {
+	lst := make([]*User, 0)
+	finder := zorm.NewSelectFinder(UserTableName).Append("WHERE "+where, args...)
+	finder.SelectTotalCount = false
+	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//err := DB(ctx).Where(where, args...).Find(&lst).Error
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range lst {
+		user.RolesLst = strings.Fields(user.Roles)
+		user.Admin = user.IsAdmin()
+	}
+
+	return lst, nil
+}
+
+func UserMapGet(ctx *ctx.Context, where string, args ...interface{}) map[string]*User {
+	lst, err := UsersGet(ctx, where, args...)
+	if err != nil {
+		logger.Errorf("UsersGet err: %v", err)
+		return nil
+	}
+	um := make(map[string]*User, len(lst))
+	for _, user := range lst {
+		um[user.Username] = user
+	}
+	return um
+}
+
 func UserGetByUsername(ctx *ctx.Context, username string) (*User, error) {
 	return UserGet(ctx, "username=?", username)
 }
@@ -329,7 +366,23 @@ func UserGetById(ctx *ctx.Context, id int64) (*User, error) {
 	return UserGet(ctx, "id=?", id)
 }
 
-func InitRoot(ctx *ctx.Context) {
+func UsersGetByGroupIds(ctx *ctx.Context, groupIds []int64) ([]User, error) {
+	if len(groupIds) == 0 {
+		return nil, nil
+	}
+
+	userIds, err := GroupsMemberIds(ctx, groupIds)
+	if err != nil {
+		return nil, err
+	}
+	users, err := UserGetsByIds(ctx, userIds)
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+func InitRoot(ctx *ctx.Context) bool {
 	user, err := UserGetByUsername(ctx, "root")
 	if err != nil {
 		fmt.Println("failed to query user root:", err)
@@ -337,12 +390,12 @@ func InitRoot(ctx *ctx.Context) {
 	}
 
 	if user == nil {
-		return
+		return false
 	}
 
 	if len(user.Password) > 31 {
 		// already done before
-		return
+		return false
 	}
 
 	newPass, err := CryptoPass(ctx, user.Password)
@@ -358,6 +411,7 @@ func InitRoot(ctx *ctx.Context) {
 	}
 
 	fmt.Println("root password init done")
+	return true
 }
 
 func reachLoginFailCount(ctx *ctx.Context, redisObj storage.Redis, username string, count int64) (bool, error) {
@@ -761,7 +815,7 @@ func (u *User) NopriIdents(ctx *ctx.Context, idents []string) ([]string, error) 
 	}
 
 	allowedIdents := make([]string, 0)
-	finder := zorm.NewSelectFinder(TargetTableName, "ident").Append("WHERE group_id in (?)", bgids)
+	finder := zorm.NewSelectFinder(TargetTableName, "target.ident").Append("join target_busi_group on target.ident = target_busi_group.target_ident WHERE target_busi_group.group_id in (?)", bgids)
 	finder.SelectTotalCount = false
 	err = zorm.Query(ctx.Ctx, finder, &allowedIdents, nil)
 	//err = DB(ctx).Model(&Target{}).Where("group_id in ?", bgids).Pluck("ident", &allowedIdents).Error
@@ -801,7 +855,11 @@ func (u *User) BusiGroups(ctx *ctx.Context, limit int, query string, all ...bool
 			if t == nil {
 				return lst, nil
 			}
-			finder := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id=? order by name asc", t.GroupId)
+			t.GroupIds, err = TargetGroupIdsGetByIdent(ctx, t.Ident)
+			if err != nil {
+				return nil, err
+			}
+			finder := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id in(?) order by name asc", t.GroupIds)
 			finder.SelectTotalCount = false
 			err = zorm.Query(ctx.Ctx, finder, &lst, page)
 			//err = DB(ctx).Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
@@ -836,9 +894,15 @@ func (u *User) BusiGroups(ctx *ctx.Context, limit int, query string, all ...bool
 		if err != nil {
 			return lst, err
 		}
-
+		if t == nil {
+			return lst, nil
+		}
+		t.GroupIds, err = TargetGroupIdsGetByIdent(ctx, t.Ident)
+		if err != nil {
+			return nil, err
+		}
 		if t != nil && slice.ContainsInt64(busiGroupIds, t.GroupId) {
-			finder := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id=? order by name asc", t.GroupId)
+			finder := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id in (?) order by name asc", t.GroupIds)
 			finder.SelectTotalCount = false
 			err = zorm.Query(ctx.Ctx, finder, &lst, page)
 			//err = DB(ctx).Order("name").Limit(limit).Where("id=?", t.GroupId).Find(&lst).Error
@@ -929,6 +993,9 @@ func (u *User) ExtractToken(key string) (string, bool) {
 		return ret.String(), ret.Exists()
 	case Email:
 		return u.Email, u.Email != ""
+	case Lark, LarkCard:
+		ret := gjson.GetBytes(bs, LarkKey)
+		return ret.String(), ret.Exists()
 	default:
 		return "", false
 	}

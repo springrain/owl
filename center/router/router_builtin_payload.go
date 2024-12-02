@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/ccfos/nightingale/v6/models"
 	"github.com/gin-gonic/gin"
 	"github.com/toolkits/pkg/ginx"
@@ -42,7 +43,7 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 
 				for _, rule := range alertRules {
 					if rule.UUID == 0 {
-						rule.UUID = time.Now().UnixNano()
+						rule.UUID = time.Now().UnixMicro()
 					}
 
 					contentBytes, err := json.Marshal(rule)
@@ -52,15 +53,15 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 					}
 
 					bp := models.BuiltinPayload{
-						Type:      lst[i].Type,
-						Component: lst[i].Component,
-						Cate:      lst[i].Cate,
-						Name:      rule.Name,
-						Tags:      rule.AppendTags,
-						UUID:      rule.UUID,
-						Content:   string(contentBytes),
-						CreatedBy: username,
-						UpdatedBy: username,
+						Type:        lst[i].Type,
+						ComponentID: lst[i].ComponentID,
+						Cate:        lst[i].Cate,
+						Name:        rule.Name,
+						Tags:        rule.AppendTags,
+						UUID:        rule.UUID,
+						Content:     string(contentBytes),
+						CreatedBy:   username,
+						UpdatedBy:   username,
 					}
 
 					if err := bp.Add(rt.Ctx, username); err != nil {
@@ -77,19 +78,25 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 			}
 
 			if alertRule.UUID == 0 {
-				alertRule.UUID = time.Now().UnixNano()
+				alertRule.UUID = time.Now().UnixMicro()
+			}
+
+			contentBytes, err := json.Marshal(alertRule)
+			if err != nil {
+				reterr[alertRule.Name] = err.Error()
+				continue
 			}
 
 			bp := models.BuiltinPayload{
-				Type:      lst[i].Type,
-				Component: lst[i].Component,
-				Cate:      lst[i].Cate,
-				Name:      alertRule.Name,
-				Tags:      alertRule.AppendTags,
-				UUID:      alertRule.UUID,
-				Content:   lst[i].Content,
-				CreatedBy: username,
-				UpdatedBy: username,
+				Type:        lst[i].Type,
+				ComponentID: lst[i].ComponentID,
+				Cate:        lst[i].Cate,
+				Name:        alertRule.Name,
+				Tags:        alertRule.AppendTags,
+				UUID:        alertRule.UUID,
+				Content:     string(contentBytes),
+				CreatedBy:   username,
+				UpdatedBy:   username,
 			}
 
 			if err := bp.Add(rt.Ctx, username); err != nil {
@@ -105,7 +112,7 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 
 				for _, dashboard := range dashboards {
 					if dashboard.UUID == 0 {
-						dashboard.UUID = time.Now().UnixNano()
+						dashboard.UUID = time.Now().UnixMicro()
 					}
 
 					contentBytes, err := json.Marshal(dashboard)
@@ -115,15 +122,15 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 					}
 
 					bp := models.BuiltinPayload{
-						Type:      lst[i].Type,
-						Component: lst[i].Component,
-						Cate:      lst[i].Cate,
-						Name:      dashboard.Name,
-						Tags:      dashboard.Tags,
-						UUID:      dashboard.UUID,
-						Content:   string(contentBytes),
-						CreatedBy: username,
-						UpdatedBy: username,
+						Type:        lst[i].Type,
+						ComponentID: lst[i].ComponentID,
+						Cate:        lst[i].Cate,
+						Name:        dashboard.Name,
+						Tags:        dashboard.Tags,
+						UUID:        dashboard.UUID,
+						Content:     string(contentBytes),
+						CreatedBy:   username,
+						UpdatedBy:   username,
 					}
 
 					if err := bp.Add(rt.Ctx, username); err != nil {
@@ -140,25 +147,39 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 			}
 
 			if dashboard.UUID == 0 {
-				dashboard.UUID = time.Now().UnixNano()
+				dashboard.UUID = time.Now().UnixMicro()
+			}
+
+			contentBytes, err := json.Marshal(dashboard)
+			if err != nil {
+				reterr[dashboard.Name] = err.Error()
+				continue
 			}
 
 			bp := models.BuiltinPayload{
-				Type:      lst[i].Type,
-				Component: lst[i].Component,
-				Cate:      lst[i].Cate,
-				Name:      dashboard.Name,
-				Tags:      dashboard.Tags,
-				UUID:      dashboard.UUID,
-				Content:   lst[i].Content,
-				CreatedBy: username,
-				UpdatedBy: username,
+				Type:        lst[i].Type,
+				ComponentID: lst[i].ComponentID,
+				Cate:        lst[i].Cate,
+				Name:        dashboard.Name,
+				Tags:        dashboard.Tags,
+				UUID:        dashboard.UUID,
+				Content:     string(contentBytes),
+				CreatedBy:   username,
+				UpdatedBy:   username,
 			}
 
 			if err := bp.Add(rt.Ctx, username); err != nil {
 				reterr[bp.Name] = i18n.Sprintf(c.GetHeader("X-Language"), err.Error())
 			}
 		} else {
+			if lst[i].Type == "collect" {
+				c := make(map[string]interface{})
+				if _, err := toml.Decode(lst[i].Content, &c); err != nil {
+					reterr[lst[i].Name] = err.Error()
+					continue
+				}
+			}
+
 			if err := lst[i].Add(rt.Ctx, username); err != nil {
 				reterr[lst[i].Name] = i18n.Sprintf(c.GetHeader("X-Language"), err.Error())
 			}
@@ -171,19 +192,20 @@ func (rt *Router) builtinPayloadsAdd(c *gin.Context) {
 
 func (rt *Router) builtinPayloadsGets(c *gin.Context) {
 	typ := ginx.QueryStr(c, "type", "")
-	component := ginx.QueryStr(c, "component", "")
+	ComponentID := ginx.QueryInt64(c, "component_id", 0)
+
 	cate := ginx.QueryStr(c, "cate", "")
 	query := ginx.QueryStr(c, "query", "")
 
-	lst, err := models.BuiltinPayloadGets(rt.Ctx, typ, component, cate, query)
+	lst, err := models.BuiltinPayloadGets(rt.Ctx, int64(ComponentID), typ, cate, query)
 	ginx.NewRender(c).Data(lst, err)
 }
 
 func (rt *Router) builtinPayloadcatesGet(c *gin.Context) {
 	typ := ginx.QueryStr(c, "type", "")
-	component := ginx.QueryStr(c, "component", "")
+	ComponentID := ginx.QueryInt64(c, "component_id", 0)
 
-	cates, err := models.BuiltinPayloadCates(rt.Ctx, typ, component)
+	cates, err := models.BuiltinPayloadCates(rt.Ctx, typ, uint64(ComponentID))
 	ginx.NewRender(c).Data(cates, err)
 }
 
@@ -229,6 +251,11 @@ func (rt *Router) builtinPayloadsPut(c *gin.Context) {
 
 		req.Name = dashboard.Name
 		req.Tags = dashboard.Tags
+	} else if req.Type == "collect" {
+		c := make(map[string]interface{})
+		if _, err := toml.Decode(req.Content, &c); err != nil {
+			ginx.Bomb(http.StatusBadRequest, err.Error())
+		}
 	}
 
 	username := Username(c)
@@ -244,4 +271,16 @@ func (rt *Router) builtinPayloadsDel(c *gin.Context) {
 	req.Verify()
 
 	ginx.NewRender(c).Message(models.BuiltinPayloadDels(rt.Ctx, req.Ids))
+}
+
+func (rt *Router) builtinPayloadsGetByUUIDOrID(c *gin.Context) {
+	uuid := ginx.QueryInt64(c, "uuid", 0)
+	// 优先以 uuid 为准
+	if uuid != 0 {
+		ginx.NewRender(c).Data(models.BuiltinPayloadGet(rt.Ctx, "uuid = ?", uuid))
+		return
+	}
+
+	id := ginx.QueryInt64(c, "id", 0)
+	ginx.NewRender(c).Data(models.BuiltinPayloadGet(rt.Ctx, "id = ?", id))
 }

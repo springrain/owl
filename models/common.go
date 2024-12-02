@@ -41,6 +41,19 @@ func Insert(ctx *ctx.Context, obj zorm.IEntityStruct) error {
 	return err
 }
 
+func CreateInBatches(ctx *ctx.Context, all interface{}) error {
+	objs := all.([]interface{})
+	entitys := make([]zorm.IEntityStruct, len(objs))
+	for i := 0; i < len(objs); i++ {
+		entity := objs[i].(zorm.IEntityStruct)
+		entitys = append(entitys, entity)
+	}
+	_, err := zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
+		return zorm.InsertSlice(ctx, entitys)
+	})
+	return err
+}
+
 // CryptoPass crypto password use salt
 func CryptoPass(ctx *ctx.Context, raw string) (string, error) {
 	salt, err := ConfigsGet(ctx, SALT)

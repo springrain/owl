@@ -50,6 +50,15 @@ func MemberIds(ctx *ctx.Context, groupId int64) ([]int64, error) {
 	return ids, err
 }
 
+func GroupsMemberIds(ctx *ctx.Context, groupIds []int64) ([]int64, error) {
+	ids := make([]int64, 0)
+	finder := zorm.NewSelectFinder(UserGroupMemberTableName, "user_id").Append("WHERE group_id in (?)", groupIds)
+	finder.SelectTotalCount = false
+	err := zorm.Query(ctx.Ctx, finder, &ids, nil)
+	//err := DB(ctx).Model(&UserGroupMember{}).Where("group_id in ?", groupIds).Pluck("user_id", &ids).Error
+	return ids, err
+}
+
 func UserGroupMemberCount(ctx *ctx.Context, where string, args ...interface{}) (int64, error) {
 	finder := zorm.NewSelectFinder(UserGroupMemberTableName, "count(*)")
 	AppendWhere(finder, where, args...)

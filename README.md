@@ -29,15 +29,16 @@
 
 ## 夜莺 Nightingale 是什么
 
-夜莺监控是一款开源云原生观测分析工具，采用 All-in-One 的设计理念，集数据采集、可视化、监控告警、数据分析于一体，与云原生生态紧密集成，提供开箱即用的企业级监控分析和告警能力。夜莺于 2020 年 3 月 20 日，在 github 上发布 v1 版本，已累计迭代 100 多个版本。
+夜莺监控是一款开源云原生观测分析工具，采用 All-in-One 的设计理念，集数据采集、可视化、监控告警、数据分析于一体，与云原生生态紧密集成，提供开箱即用的企业级监控分析和告警能力。夜莺于 2020 年 3 月 20 日，在 GitHub 上发布 v1 版本，已累计迭代 100 多个版本。
 
 夜莺最初由滴滴开发和开源，并于 2022 年 5 月 11 日，捐赠予中国计算机学会开源发展委员会（CCF ODC），为 CCF ODC 成立后接受捐赠的第一个开源项目。夜莺的核心研发团队，也是 Open-Falcon 项目原核心研发人员，从 2014 年（Open-Falcon 是 2014 年开源）算起来，也有 10 年了，只为把监控这个事情做好。
 
 
 ## 快速开始
-- 👉[文档中心](https://flashcat.cloud/docs/) | [下载中心](https://flashcat.cloud/download/nightingale/)
-- ❤️[报告 Bug](https://github.com/ccfos/nightingale/issues/new?assignees=&labels=&projects=&template=question.yml)
-- ℹ️为了提供更快速的访问体验，上述文档和下载站点托管于 [FlashcatCloud](https://flashcat.cloud)
+- 👉 [文档中心](https://flashcat.cloud/docs/) | [下载中心](https://flashcat.cloud/download/nightingale/)
+- ❤️ [报告 Bug](https://github.com/ccfos/nightingale/issues/new?assignees=&labels=&projects=&template=question.yml)
+- ℹ️ 为了提供更快速的访问体验，上述文档和下载站点托管于 [FlashcatCloud](https://flashcat.cloud)
+- 💡 前后端代码分离，前端代码仓库：[https://github.com/n9e/fe](https://github.com/n9e/fe)
 
 ## 功能特点
 
@@ -49,6 +50,11 @@
 
 
 ## 截图演示
+
+
+你可以在页面的右上角，切换语言和主题，目前我们支持英语、简体中文、繁体中文。
+
+![语言切换](https://download.flashcat.cloud/ulric/n9e-switch-i18n.png)
 
 即时查询，类似 Prometheus 内置的查询分析页面，做 ad-hoc 查询，夜莺做了一些 UI 优化，同时提供了一些内置 promql 指标，让不太了解 promql 的用户也可以快速查询。
 
@@ -83,15 +89,16 @@
 - 报告Bug，优先推荐提交[夜莺GitHub Issue](https://github.com/ccfos/nightingale/issues/new?assignees=&labels=kind%2Fbug&projects=&template=bug_report.yml)
 - 推荐完整浏览[夜莺文档站点](https://flashcat.cloud/docs/content/flashcat-monitor/nightingale-v7/introduction/)，了解更多信息
 - 推荐搜索关注夜莺公众号，第一时间获取社区动态：`夜莺监控Nightingale`
-- 日常问题交流推荐加入[知识星球](https://download.flashcat.cloud/ulric/20240319095409.png)，也可以加我微信 `picobyte`，备注：`夜莺加群-<公司>-<姓名>` 拉入微信群，不过研发人员主要是关注 github issue 和星球，微信群关注较少
+- 日常问题交流：
+  - QQ群：730841964
+  - [加入微信群](https://download.flashcat.cloud/ulric/20241022141621.png)，如果二维码过期了，可以联系我（我的微信：`picobyte`）拉群，备注： `夜莺互助群`
 
 ## 广受关注
 [![Stargazers over time](https://api.star-history.com/svg?repos=ccfos/nightingale&type=Date)](https://star-history.com/#ccfos/nightingale&Date)
 
-
 ## 社区共建
-- ❇️请阅读浏览[夜莺开源项目和社区治理架构草案](./doc/community-governance.md)，真诚欢迎每一位用户、开发者、公司以及组织，使用夜莺监控、积极反馈 Bug、提交功能需求、分享最佳实践，共建专业、活跃的夜莺开源社区。
-- 夜莺贡献者❤️
+- ❇️ 请阅读浏览[夜莺开源项目和社区治理架构草案](./doc/community-governance.md)，真诚欢迎每一位用户、开发者、公司以及组织，使用夜莺监控、积极反馈 Bug、提交功能需求、分享最佳实践，共建专业、活跃的夜莺开源社区。
+- ❤️ 夜莺贡献者
 <a href="https://github.com/ccfos/nightingale/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=ccfos/nightingale" />
 </a>

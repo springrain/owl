@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -13,18 +14,19 @@ const BuiltinPayloadTableName = "builtin_payloads"
 
 type BuiltinPayload struct {
 	zorm.EntityStruct
-	ID        int64  `json:"id" column:"id"`
-	Type      string `json:"type" column:"type"`           // Alert Dashboard Collet
-	Component string `json:"component" column:"component"` // Host MySQL Redis
-	Cate      string `json:"cate" column:"cate"`           // categraf_v1 telegraf_v1
-	Name      string `json:"name" column:"name"`           //
-	Tags      string `json:"tags" column:"tags"`           // {"host":"
-	Content   string `json:"content" column:"content"`
-	UUID      int64  `json:"uuid" column:"uuid"`
-	CreatedAt int64  `json:"created_at" column:"created_at"`
-	CreatedBy string `json:"created_by" column:"created_by"`
-	UpdatedAt int64  `json:"updated_at" column:"updated_at"`
-	UpdatedBy string `json:"updated_by" column:"updated_by"`
+	ID          int64  `json:"id" column:"id"`
+	Type        string `json:"type" column:"type"`                 // Alert Dashboard Collet
+	Component   string `json:"component" column:"component"`       // Host MySQL Redis
+	ComponentID int64  `json:"component_id" column:"component_id"` // Host MySQL Redis
+	Cate        string `json:"cate" column:"cate"`                 // categraf_v1 telegraf_v1
+	Name        string `json:"name" column:"name"`                 //
+	Tags        string `json:"tags" column:"tags"`                 // {"host":"
+	Content     string `json:"content" column:"content"`
+	UUID        int64  `json:"uuid" column:"uuid"`
+	CreatedAt   int64  `json:"created_at" column:"created_at"`
+	CreatedBy   string `json:"created_by" column:"created_by"`
+	UpdatedAt   int64  `json:"updated_at" column:"updated_at"`
+	UpdatedBy   string `json:"updated_by" column:"updated_by"`
 }
 
 func (bp *BuiltinPayload) GetTableName() string {
@@ -37,9 +39,8 @@ func (bp *BuiltinPayload) Verify() error {
 		return errors.New("type is blank")
 	}
 
-	bp.Component = strings.TrimSpace(bp.Component)
-	if bp.Component == "" {
-		return errors.New("component is blank")
+	if bp.ComponentID == 0 {
+		return errors.New("component_id is blank")
 	}
 
 	if bp.Name == "" {
@@ -50,10 +51,10 @@ func (bp *BuiltinPayload) Verify() error {
 }
 
 func BuiltinPayloadExists(ctx *ctx.Context, bp *BuiltinPayload) (bool, error) {
-	finder := zorm.NewSelectFinder(BuiltinPayloadTableName, "count(*)").Append("WHERE type = ? AND component = ? AND name = ? AND cate = ?", bp.Type, bp.Component, bp.Name, bp.Cate)
+	finder := zorm.NewSelectFinder(BuiltinPayloadTableName, "count(*)").Append("WHERE type = ? AND component_id = ? AND name = ? AND cate = ?", bp.Type, bp.ComponentID, bp.Name, bp.Cate)
 	count, err := Count(ctx, finder)
 	//var count int64
-	//err := DB(ctx).Model(bp).Where("type = ? AND component = ? AND name = ? AND cate = ?", bp.Type, bp.Component, bp.Name, bp.Cate).Count(&count).Error
+	//err := DB(ctx).Model(bp).Where("type = ? AND component_id = ? AND name = ? AND cate = ?", bp.Type, bp.ComponentID, bp.Name, bp.Cate).Count(&count).Error
 	if err != nil {
 		return false, err
 	}
@@ -84,7 +85,7 @@ func (bp *BuiltinPayload) Update(ctx *ctx.Context, req BuiltinPayload) error {
 		return err
 	}
 
-	if bp.Type != req.Type || bp.Component != req.Component || bp.Name != req.Name {
+	if bp.Type != req.Type || bp.ComponentID != req.ComponentID || bp.Name != req.Name {
 		exists, err := BuiltinPayloadExists(ctx, &req)
 		if err != nil {
 			return err
@@ -128,16 +129,16 @@ func BuiltinPayloadGet(ctx *ctx.Context, where string, args ...interface{}) (*Bu
 	return &bp, nil
 }
 
-func BuiltinPayloadGets(ctx *ctx.Context, typ, component, cate, query string) ([]*BuiltinPayload, error) {
+func BuiltinPayloadGets(ctx *ctx.Context, componentId int64, typ, cate, query string) ([]*BuiltinPayload, error) {
 	finder := zorm.NewSelectFinder(BuiltinPayloadTableName).Append("WHERE 1=1")
 	//session := DB(ctx)
 	if typ != "" {
 		//session = session.Where("type = ?", typ)
 		finder.Append("and type = ?", typ)
 	}
-	if component != "" {
-		//session = session.Where("component = ?", component)
-		finder.Append("and component = ?", component)
+	if componentId != 0 {
+		//session = session.Where("component_id = ?", componentId)
+		finder.Append("and component_id = ?", componentId)
 	}
 
 	if cate != "" {
@@ -162,11 +163,11 @@ func BuiltinPayloadGets(ctx *ctx.Context, typ, component, cate, query string) ([
 }
 
 // get cates of BuiltinPayload by type and component, return []string
-func BuiltinPayloadCates(ctx *ctx.Context, typ, component string) ([]string, error) {
+func BuiltinPayloadCates(ctx *ctx.Context, typ string, componentID uint64) ([]string, error) {
 	var cates []string
-	finder := zorm.NewSelectFinder(BuiltinPayloadTableName, "Distinct cate").Append("WHERE type = ? and component = ?", typ, component)
+	finder := zorm.NewSelectFinder(BuiltinPayloadTableName, "Distinct cate").Append("WHERE type = ? and component_id = ?", typ, componentID)
 	err := zorm.Query(ctx.Ctx, finder, &cates, nil)
-	//err := DB(ctx).Model(new(BuiltinPayload)).Where("type = ? and component = ?", typ, component).Distinct("cate").Pluck("cate", &cates).Error
+	//err := DB(ctx).Model(new(BuiltinPayload)).Where("type = ? and component_id = ?", typ, componentID).Distinct("cate").Pluck("cate", &cates).Error
 	return cates, err
 }
 
@@ -184,4 +185,49 @@ func BuiltinPayloadComponents(ctx *ctx.Context, typ, cate string) (string, error
 		return "", nil
 	}
 	return components[0], nil
+}
+
+// InitBuiltinPayloads 兼容新旧 BuiltinPayload 格式
+func InitBuiltinPayloads(ctx *ctx.Context) error {
+	//var lst []*BuiltinPayload
+	lst := make([]*BuiltinPayload, 0)
+	components, err := BuiltinComponentGets(ctx, "")
+	if err != nil {
+		return err
+	}
+
+	identToId := make(map[string]int64)
+	for _, component := range components {
+		identToId[component.Ident] = component.ID
+	}
+
+	finder := zorm.NewSelectFinder(BuiltinPayloadTableName).Append("WHERE component_id = 0 or component_id is NULL")
+	finder.SelectTotalCount = false
+	err = zorm.Query(ctx.Ctx, finder, &lst, nil)
+	//err = DB(ctx).Where("component_id = 0 or component_id is NULL").Find(&lst).Error
+
+	if err != nil {
+		return err
+	}
+
+	for _, bp := range lst {
+		componentId, ok := identToId[bp.Component]
+		if !ok {
+			continue
+		}
+		bp.ComponentID = componentId
+	}
+
+	if len(lst) == 0 {
+		return nil
+	}
+	listEntity := make([]zorm.IEntityStruct, len(lst))
+	for i := 0; i < len(lst); i++ {
+		listEntity = append(listEntity, lst[i])
+	}
+	_, err = zorm.Transaction(ctx.Ctx, func(ctx context.Context) (interface{}, error) {
+		return zorm.InsertSlice(ctx, listEntity)
+	})
+	return err
+	//return DB(ctx).Save(&lst).Error
 }

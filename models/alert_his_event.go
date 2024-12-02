@@ -121,7 +121,7 @@ func (e *AlertHisEvent) FillNotifyGroups(ctx *ctx.Context, cache map[int64]*User
 	return nil
 }
 
-func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string) (int64, error) {
+func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, ruleId int64, query string) (int64, error) {
 	finder := zorm.NewSelectFinder(AlertHisEventTableName, "count(*)")
 	finder.Append("WHERE last_eval_time between ? and ?", stime, etime)
 	//session := DB(ctx).Model(&AlertHisEvent{}).Where("last_eval_time between ? and ?", stime, etime)
@@ -156,6 +156,11 @@ func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, 
 		//session = session.Where("cate in ?", cates)
 	}
 
+	if ruleId > 0 {
+		finder.Append("and rule_id = ?", ruleId)
+		//session = session.Where("rule_id = ?", ruleId)
+	}
+
 	if query != "" {
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
@@ -168,7 +173,7 @@ func AlertHisEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, 
 	//return Count(session)
 }
 
-func AlertHisEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, query string, limit, offset int) ([]AlertHisEvent, error) {
+func AlertHisEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, recovered int, dsIds []int64, cates []string, ruleId int64, query string, limit, offset int) ([]AlertHisEvent, error) {
 	finder := zorm.NewSelectFinder(AlertHisEventTableName)
 	finder.Append("WHERE last_eval_time between ? and ?", stime, etime)
 	//session := DB(ctx).Where("last_eval_time between ? and ?", stime, etime)
@@ -201,6 +206,11 @@ func AlertHisEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, e
 	if len(cates) > 0 {
 		finder.Append("and cate in (?)", cates)
 		//session = session.Where("cate in ?", cates)
+	}
+
+	if ruleId > 0 {
+		finder.Append("and rule_id = ?", ruleId)
+		//session = session.Where("rule_id = ?", ruleId)
 	}
 
 	if query != "" {

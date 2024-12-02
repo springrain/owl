@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ccfos/nightingale/v6/alert/common"
 	"github.com/ccfos/nightingale/v6/alert/dispatch"
 	"github.com/ccfos/nightingale/v6/alert/mute"
 	"github.com/ccfos/nightingale/v6/alert/naming"
@@ -34,7 +33,7 @@ func (rt *Router) pushEventToQueue(c *gin.Context) {
 			continue
 		}
 
-		arr := strings.Split(pair, "=")
+		arr := strings.SplitN(pair, "=", 2)
 		if len(arr) != 2 {
 			continue
 		}
@@ -92,7 +91,7 @@ func (rt *Router) eventPersist(c *gin.Context) {
 
 type eventForm struct {
 	Alert         bool                  `json:"alert"`
-	AnomalyPoints []common.AnomalyPoint `json:"vectors"`
+	AnomalyPoints []models.AnomalyPoint `json:"vectors"`
 	RuleId        int64                 `json:"rule_id"`
 	DatasourceId  int64                 `json:"datasource_id"`
 	Inhibit       bool                  `json:"inhibit"`
@@ -129,7 +128,7 @@ func (rt *Router) makeEvent(c *gin.Context) {
 		} else {
 			for _, vector := range events[i].AnomalyPoints {
 				readableString := vector.ReadableValue()
-				go ruleWorker.RecoverSingle(process.Hash(events[i].RuleId, events[i].DatasourceId, vector), vector.Timestamp, &readableString)
+				go ruleWorker.RecoverSingle(false, process.Hash(events[i].RuleId, events[i].DatasourceId, vector), vector.Timestamp, &readableString)
 			}
 		}
 	}

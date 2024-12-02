@@ -60,6 +60,18 @@ func (c *BusiGroupCacheType) GetByBusiGroupId(id int64) *models.BusiGroup {
 	return c.ugs[id]
 }
 
+func (c *BusiGroupCacheType) GetNamesByBusiGroupIds(ids []int64) []string {
+	c.RLock()
+	defer c.RUnlock()
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if ug, exists := c.ugs[id]; exists {
+			names = append(names, ug.Name)
+		}
+	}
+	return names
+}
+
 func (c *BusiGroupCacheType) SyncBusiGroups() {
 	err := c.syncBusiGroups()
 	if err != nil {
@@ -111,4 +123,15 @@ func (c *BusiGroupCacheType) syncBusiGroups() error {
 	dumper.PutSyncRecord("busi_groups", start.Unix(), ms, len(m), "success")
 
 	return nil
+}
+
+func (c *BusiGroupCacheType) GetNameByBusiGroupId(id int64) string {
+	c.RLock()
+	defer c.RUnlock()
+
+	busiGroup := c.ugs[id]
+	if busiGroup == nil {
+		return ""
+	}
+	return busiGroup.Name
 }

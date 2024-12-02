@@ -13,7 +13,9 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 	"github.com/ccfos/nightingale/v6/pushgw/pconf"
 
+	"github.com/jinzhu/copier"
 	"github.com/pkg/errors"
+	"github.com/tidwall/match"
 	"github.com/toolkits/pkg/logger"
 	"github.com/toolkits/pkg/str"
 )
@@ -24,8 +26,24 @@ const (
 	HOST   = "host"
 	LOKI   = "loki"
 
-	PROMETHEUS = "prometheus"
-	TDENGINE   = "tdengine"
+	PROMETHEUS    = "prometheus"
+	TDENGINE      = "tdengine"
+	ELASTICSEARCH = "elasticsearch"
+)
+
+const (
+	AlertRuleEnabled  = 0
+	AlertRuleDisabled = 1
+
+	AlertRuleEnableInGlobalBG = 0
+	AlertRuleEnableInOneBG    = 1
+
+	AlertRuleNotNotifyRecovered = 0
+	AlertRuleNotifyRecovered    = 1
+
+	AlertRuleNotifyRepeatStep60Min = 60
+
+	AlertRuleRecoverDuration0Sec = 0
 )
 const AlertRuleTableName = "alert_rule"
 
@@ -36,6 +54,8 @@ type AlertRule struct {
 	Cate                  string                 `json:"cate" column:"cate"`                             // alert rule cate (prometheus|elasticsearch)
 	DatasourceIds         string                 `json:"-" column:"datasource_ids"`                      // datasource ids
 	DatasourceIdsJson     []int64                `json:"datasource_ids"`                                 // for fe
+	DatasourceQueries     string                 `json:"-" column:"datasource_queries"`                  // datasource queries
+	DatasourceQueriesJson []DatasourceQuery      `json:"datasource_queries"`                             // datasource queries
 	Cluster               string                 `json:"cluster" column:"cluster"`                       // take effect by clusters, seperated by space
 	Name                  string                 `json:"name" column:"name"`                             // rule name
 	Note                  string                 `json:"note" column:"note"`                             // will sent in notify
@@ -86,6 +106,50 @@ type AlertRule struct {
 	UpdateAt              int64                  `json:"update_at" column:"update_at"`
 	UpdateBy              string                 `json:"update_by" column:"update_by"`
 	UUID                  int64                  `json:"uuid"` // tpl identifier
+	CurEventCount         int64                  `json:"cur_event_count"`
+	UpdateByNickname      string                 `json:"update_by_nickname"` // for fe
+	CronPattern           string                 `json:"cron_pattern"`
+}
+
+type ChildVarConfig struct {
+	ParamVal        []map[string]ParamQuery `json:"param_val"`
+	ChildVarConfigs *ChildVarConfig         `json:"child_var_configs"`
+}
+
+type ParamQuery struct {
+	ParamType string      `json:"param_type"` // host、device、enum、threshold 三种类型
+	Query     interface{} `json:"query"`
+}
+
+type VarConfig struct {
+	ParamVal        []ParamQueryForFirst `json:"param_val"`
+	ChildVarConfigs *ChildVarConfig      `json:"child_var_configs"`
+}
+
+// ParamQueryForFirst 同 ParamQuery，仅在第一层出现
+type ParamQueryForFirst struct {
+	Name      string      `json:"name"`
+	ParamType string      `json:"param_type"`
+	Query     interface{} `json:"query"`
+}
+
+type Tpl struct {
+	TplId   int64    `json:"tpl_id"`
+	TplName string   `json:"tpl_name"`
+	Host    []string `json:"host"`
+}
+
+type RuleConfig struct {
+	Version               string                 `json:"version,omitempty"`
+	EventRelabelConfig    []*pconf.RelabelConfig `json:"event_relabel_config,omitempty"`
+	TaskTpls              []*Tpl                 `json:"task_tpls,omitempty"`
+	Queries               interface{}            `json:"queries,omitempty"`
+	Triggers              []Trigger              `json:"triggers,omitempty"`
+	Inhibit               bool                   `json:"inhibit,omitempty"`
+	PromQl                string                 `json:"prom_ql,omitempty"`
+	Severity              int                    `json:"severity,omitempty"`
+	AlgoParams            interface{}            `json:"algo_params,omitempty"`
+	OverrideGlobalWebhook bool                   `json:"override_global_webhook,omitempty"`
 }
 
 type PromRuleConfig struct {
@@ -96,6 +160,19 @@ type PromRuleConfig struct {
 	AlgoParams interface{} `json:"algo_params"`
 }
 
+type RecoverJudge int
+
+const (
+	Origin             RecoverJudge = 0
+	RecoverWithoutData RecoverJudge = 1
+	RecoverOnCondition RecoverJudge = 2
+)
+
+type RecoverConfig struct {
+	JudgeType  RecoverJudge `json:"judge_type"`
+	RecoverExp string       `json:"recover_exp"`
+}
+
 type HostRuleConfig struct {
 	Queries  []HostQuery   `json:"queries"`
 	Triggers []HostTrigger `json:"triggers"`
@@ -103,8 +180,12 @@ type HostRuleConfig struct {
 }
 
 type PromQuery struct {
-	PromQl   string `json:"prom_ql"`
-	Severity int    `json:"severity"`
+	PromQl        string        `json:"prom_ql"`
+	Severity      int           `json:"severity"`
+	VarEnabled    bool          `json:"var_enabled"`
+	VarConfig     VarConfig     `json:"var_config"`
+	RecoverConfig RecoverConfig `json:"recover_config"`
+	Unit          string        `json:"unit"`
 }
 
 type HostTrigger struct {
@@ -126,6 +207,145 @@ type Trigger struct {
 	Mode        int         `json:"mode"`
 	Exp         string      `json:"exp"`
 	Severity    int         `json:"severity"`
+
+	Type          string        `json:"type,omitempty"`
+	Duration      int           `json:"duration,omitempty"`
+	Percent       int           `json:"percent,omitempty"`
+	Joins         []Join        `json:"joins"`
+	JoinRef       string        `json:"join_ref"`
+	RecoverConfig RecoverConfig `json:"recover_config"`
+}
+
+type Join struct {
+	JoinType string   `json:"join_type"`
+	Ref      string   `json:"ref"`
+	On       []string `json:"on"`
+}
+
+var DataSourceQueryAll = DatasourceQuery{
+	MatchType: 2,
+	Op:        "in",
+	Values:    []interface{}{DatasourceIdAll},
+}
+
+type DatasourceQuery struct {
+	MatchType int           `json:"match_type"`
+	Op        string        `json:"op"`
+	Values    []interface{} `json:"values"`
+}
+
+// GetDatasourceIDsByDatasourceQueries 从 datasourceQueries 中获取 datasourceIDs
+// 查询分为精确\模糊匹配，逻辑有 in 与 not in
+// idMap 为当前 datasourceQueries 对应的数据源全集
+// nameMap 为所有 datasource 的 name 到 id 的映射，用于名称的模糊匹配
+func GetDatasourceIDsByDatasourceQueries[T any](datasourceQueriesJson []DatasourceQuery, idMap map[int64]T, nameMap map[string]int64) []int64 {
+	if len(datasourceQueriesJson) == 0 {
+		return nil
+	}
+
+	// 所有 query 取交集，初始集合为全集
+	curIDs := make(map[int64]struct{})
+	for id, _ := range idMap {
+		curIDs[id] = struct{}{}
+	}
+
+	for i := range datasourceQueriesJson {
+		// 每次 query 都在 curIDs 的基础上得到 dsIDs
+		dsIDs := make(map[int64]struct{})
+		q := datasourceQueriesJson[i]
+		if q.MatchType == 0 {
+			// 精确匹配转为 id 匹配
+			idValues := make([]int64, 0, len(q.Values))
+			for v := range q.Values {
+				var val int64
+				switch v := q.Values[v].(type) {
+				case int64:
+					val = v
+				case int:
+					val = int64(v)
+				case float64:
+					val = int64(v)
+				case float32:
+					val = int64(v)
+				case int8:
+					val = int64(v)
+				case int16:
+					val = int64(v)
+				case int32:
+					val = int64(v)
+				default:
+					continue
+				}
+				idValues = append(idValues, int64(val))
+			}
+
+			if q.Op == "in" {
+				if len(idValues) == 1 && idValues[0] == DatasourceIdAll {
+					for id := range curIDs {
+						dsIDs[id] = struct{}{}
+					}
+				} else {
+					for idx := range idValues {
+						if _, exist := curIDs[idValues[idx]]; exist {
+							dsIDs[idValues[idx]] = struct{}{}
+						}
+					}
+				}
+			} else if q.Op == "not in" {
+				for idx := range idValues {
+					delete(curIDs, idValues[idx])
+				}
+				dsIDs = curIDs
+			}
+		} else if q.MatchType == 1 {
+			// 模糊匹配使用 datasource name
+			if q.Op == "in" {
+				for dsName, dsID := range nameMap {
+					if _, exist := curIDs[dsID]; exist {
+						for idx := range q.Values {
+							if _, ok := q.Values[idx].(string); !ok {
+								continue
+							}
+
+							if match.Match(dsName, q.Values[idx].(string)) {
+								dsIDs[nameMap[dsName]] = struct{}{}
+							}
+						}
+					}
+				}
+			} else if q.Op == "not in" {
+				for dsName, _ := range nameMap {
+					for idx := range q.Values {
+						if _, ok := q.Values[idx].(string); !ok {
+							continue
+						}
+
+						if match.Match(dsName, q.Values[idx].(string)) {
+							delete(curIDs, nameMap[dsName])
+						}
+					}
+				}
+				dsIDs = curIDs
+			}
+		} else if q.MatchType == 2 {
+			// 全部数据源
+			for id := range curIDs {
+				dsIDs[id] = struct{}{}
+			}
+		}
+
+		curIDs = dsIDs
+		if len(curIDs) == 0 {
+			break
+		}
+	}
+
+	dsIds := make([]int64, 0, len(curIDs))
+	for c := range curIDs {
+		dsIds = append(dsIds, c)
+	}
+
+	return dsIds
 }
 
 func GetHostsQuery(queries []HostQuery) []map[string]interface{} {
@@ -136,9 +356,10 @@ func GetHostsQuery(queries []HostQuery) []map[string]interface{} {
 		case "group_ids":
 			ids := ParseInt64(q.Values)
 			if q.Op == "==" {
-				m["group_id in (?)"] = ids
+				m["target_busi_group.group_id in (?)"] = ids
 			} else {
-				m["group_id not in (?)"] = ids
+				m["target.ident not in (select target_ident "+
+					"from target_busi_group where group_id in (?))"] = ids
 			}
 		case "tags":
 			lst := []string{}
@@ -152,12 +373,14 @@ func GetHostsQuery(queries []HostQuery) []map[string]interface{} {
 				blank := " "
 				for _, tag := range lst {
 					m["tags like ?"+blank] = "%" + tag + "%"
+					m["host_tags like ?"+blank] = "%" + tag + "%"
 					blank += " "
 				}
 			} else {
 				blank := " "
 				for _, tag := range lst {
 					m["tags not like ?"+blank] = "%" + tag + "%"
+					m["host_tags not like ?"+blank] = "%" + tag + "%"
 					blank += " "
 				}
 			}
@@ -223,9 +446,9 @@ func (ar *AlertRule) Verify() error {
 		return fmt.Errorf("GroupId(%d) invalid", ar.GroupId)
 	}
 
-	if IsAllDatasource(ar.DatasourceIdsJson) {
-		ar.DatasourceIdsJson = []int64{0}
-	}
+	//if IsAllDatasource(ar.DatasourceIdsJson) {
+	//	ar.DatasourceIdsJson = []int64{0}
+	//}
 
 	if str.Dangerous(ar.Name) {
 		return errors.New("Name has invalid characters")
@@ -279,7 +502,7 @@ func (ar *AlertRule) Add(ctx *ctx.Context) error {
 		return err
 	}
 
-	exists, err := AlertRuleExists(ctx, 0, ar.GroupId, ar.DatasourceIdsJson, ar.Name)
+	exists, err := AlertRuleExists(ctx, 0, ar.GroupId, ar.Name)
 	if err != nil {
 		return err
 	}
@@ -297,7 +520,7 @@ func (ar *AlertRule) Add(ctx *ctx.Context) error {
 
 func (ar *AlertRule) Update(ctx *ctx.Context, arf AlertRule) error {
 	if ar.Name != arf.Name {
-		exists, err := AlertRuleExists(ctx, ar.Id, ar.GroupId, ar.DatasourceIdsJson, arf.Name)
+		exists, err := AlertRuleExists(ctx, ar.Id, ar.GroupId, arf.Name)
 		if err != nil {
 			return err
 		}
@@ -432,6 +655,21 @@ func (ar *AlertRule) UpdateColumn(ctx *ctx.Context, column string, value interfa
 		return UpdateColumn(ctx, AlertRuleTableName, ar.Id, "annotations", string(b))
 		//return DB(ctx).Model(ar).UpdateColumn("annotations", string(b)).Error
 	}
+
+	if column == "annotations" {
+		newAnnotations := value.(map[string]interface{})
+		ar.AnnotationsJSON = make(map[string]string)
+		for k, v := range newAnnotations {
+			ar.AnnotationsJSON[k] = v.(string)
+		}
+		b, err := json.Marshal(ar.AnnotationsJSON)
+		if err != nil {
+			return err
+		}
+		return UpdateColumn(ctx, AlertRuleTableName, ar.Id, "annotations", string(b))
+		//return DB(ctx).Model(ar).UpdateColumn("annotations", string(b)).Error
+	}
+
 	return UpdateColumn(ctx, AlertRuleTableName, ar.Id, column, value)
 	//return DB(ctx).Model(ar).UpdateColumn(column, value).Error
 }
@@ -441,11 +679,30 @@ func (ar *AlertRule) UpdateFieldsMap(ctx *ctx.Context, fields map[string]interfa
 	//return DB(ctx).Model(ar).Updates(fields).Error
 }
 
-// for v5 rule
-func (ar *AlertRule) FillDatasourceIds() error {
-	if ar.DatasourceIds != "" {
-		json.Unmarshal([]byte(ar.DatasourceIds), &ar.DatasourceIdsJson)
-		return nil
+func (ar *AlertRule) FillDatasourceQueries() error {
+	// 兼容旧逻辑，将 datasourceIds 转换为 datasourceQueries
+	if len(ar.DatasourceQueriesJson) == 0 && len(ar.DatasourceIds) != 0 {
+		datasourceQuery := DatasourceQuery{
+			MatchType: 0,
+			Op:        "in",
+			Values:    make([]interface{}, 0),
+		}
+
+		var values []int
+		if ar.DatasourceIds != "" {
+			json.Unmarshal([]byte(ar.DatasourceIds), &values)
+
+		}
+
+		for i := range values {
+			if values[i] == 0 {
+				// 0 表示所有数据源
+				datasourceQuery.MatchType = 2
+				break
+			}
+			datasourceQuery.Values = append(datasourceQuery.Values, values[i])
+		}
+		ar.DatasourceQueriesJson = []DatasourceQuery{datasourceQuery}
 	}
 	return nil
 }
@@ -565,13 +822,11 @@ func (ar *AlertRule) FE2DB() error {
 	}
 	ar.AlgoParams = string(algoParamsByte)
 
-	if len(ar.DatasourceIdsJson) > 0 {
-		idsByte, err := json.Marshal(ar.DatasourceIdsJson)
-		if err != nil {
-			return fmt.Errorf("marshal datasource_ids err:%v", err)
-		}
-		ar.DatasourceIds = string(idsByte)
+	datasourceQueriesByte, err := json.Marshal(ar.DatasourceQueriesJson)
+	if err != nil {
+		return fmt.Errorf("marshal algo_params err:%v", err)
 	}
+	ar.DatasourceQueries = string(datasourceQueriesByte)
 
 	if ar.RuleConfigJson == nil {
 		query := PromQuery{
@@ -636,6 +891,7 @@ func (ar *AlertRule) DB2FE() error {
 	json.Unmarshal([]byte(ar.RuleConfig), &ar.RuleConfigJson)
 	json.Unmarshal([]byte(ar.Annotations), &ar.AnnotationsJSON)
 	json.Unmarshal([]byte(ar.ExtraConfig), &ar.ExtraConfigJSON)
+	json.Unmarshal([]byte(ar.DatasourceQueries), &ar.DatasourceQueriesJson)
 
 	// 解析 RuleConfig 字段
 	var ruleConfig struct {
@@ -644,8 +900,17 @@ func (ar *AlertRule) DB2FE() error {
 	json.Unmarshal([]byte(ar.RuleConfig), &ruleConfig)
 	ar.EventRelabelConfig = ruleConfig.EventRelabelConfig
 
-	err := ar.FillDatasourceIds()
-	return err
+	// 兼容旧逻辑填充 cron_pattern
+	if ar.CronPattern == "" && ar.PromEvalInterval != 0 {
+		ar.CronPattern = fmt.Sprintf("@every %ds", ar.PromEvalInterval)
+	}
+
+	err := ar.FillDatasourceQueries()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func AlertRuleDels(ctx *ctx.Context, ids []int64, bgid ...int64) error {
@@ -669,23 +934,12 @@ func AlertRuleDels(ctx *ctx.Context, ids []int64, bgid ...int64) error {
 			}
 			return rowsAffected, err
 		})
-		/*
-			ret := session.Delete(&AlertRule{})
-			if ret.Error != nil {
-				return ret.Error
-			}
-
-			// 说明确实删掉了，把相关的活跃告警也删了，这些告警永远都不会恢复了，而且策略都没了，说明没人关心了
-			if ret.RowsAffected > 0 {
-				DB(ctx).Where("rule_id = ?", ids[i]).Delete(new(AlertCurEvent))
-			}
-		*/
 	}
 
 	return nil
 }
 
-func AlertRuleExists(ctx *ctx.Context, id, groupId int64, datasourceIds []int64, name string) (bool, error) {
+func AlertRuleExists(ctx *ctx.Context, id, groupId int64, name string) (bool, error) {
 	finder := zorm.NewSelectFinder(AlertRuleTableName).Append("WHERE id <> ? and group_id = ? and name = ?", id, groupId, name)
 	//session := DB(ctx).Where("id <> ? and group_id = ? and name = ?", id, groupId, name)
 	lst := make([]AlertRule, 0)
@@ -699,16 +953,30 @@ func AlertRuleExists(ctx *ctx.Context, id, groupId int64, datasourceIds []int64,
 		return false, nil
 	}
 
-	// match cluster
-	for _, r := range lst {
-		r.FillDatasourceIds()
-		for _, id := range r.DatasourceIdsJson {
-			if MatchDatasource(datasourceIds, id) {
-				return true, nil
-			}
-		}
-	}
 	return false, nil
+}
+
+func GetAlertRuleIdsByTaskId(ctx *ctx.Context, taskId int64) ([]int64, error) {
+	tpl := "%\"tpl_id\":" + fmt.Sprint(taskId) + "}%"
+	cb := "{ibex}/" + fmt.Sprint(taskId) + "%"
+	//session := DB(ctx).Where("rule_config like ? or callbacks like ?", tpl, cb)
+
+	finder := zorm.NewSelectFinder(AlertRuleTableName, "id").Append("WHERE rule_config like ? or callbacks like ?", tpl, cb)
+	finder.SelectTotalCount = false
+	//lst := make([]AlertRule, 0)
+	ids := make([]int64, 0)
+	err := zorm.Query(ctx.Ctx, finder, &ids, nil)
+	/*
+		err := session.Find(&lst).Error
+		if err != nil || len(lst) == 0 {
+			return ids, err
+		}
+
+		for i := 0; i < len(lst); i++ {
+			ids = append(ids, lst[i].Id)
+		}
+	*/
+	return ids, err
 }
 
 func AlertRuleGets(ctx *ctx.Context, groupId int64) ([]AlertRule, error) {
@@ -1077,4 +1345,25 @@ func GetTargetsOfHostAlertRule(ctx *ctx.Context, engineName string) (map[string]
 	}
 
 	return m, nil
+}
+
+func (ar *AlertRule) Copy(ctx *ctx.Context) (*AlertRule, error) {
+	newAr := &AlertRule{}
+	err := copier.Copy(newAr, ar)
+	if err != nil {
+		logger.Errorf("copy alert rule failed, %v", err)
+	}
+	return newAr, err
+}
+
+func InsertAlertRule(ctx *ctx.Context, ars []*AlertRule) error {
+	if len(ars) == 0 {
+		return nil
+	}
+	return CreateInBatches(ctx, ars)
+	//return DB(ctx).Create(ars).Error
+}
+
+func (ar *AlertRule) Hash() string {
+	return str.MD5(fmt.Sprintf("%d_%s_%s", ar.Id, ar.DatasourceIds, ar.RuleConfig))
 }

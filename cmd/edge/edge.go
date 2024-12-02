@@ -7,6 +7,7 @@ import (
 
 	"github.com/ccfos/nightingale/v6/alert"
 	"github.com/ccfos/nightingale/v6/alert/astats"
+	"github.com/ccfos/nightingale/v6/alert/dispatch"
 	"github.com/ccfos/nightingale/v6/alert/process"
 	alertrt "github.com/ccfos/nightingale/v6/alert/router"
 	"github.com/ccfos/nightingale/v6/center/metas"
@@ -52,11 +53,13 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 
 	targetCache := memsto.NewTargetCache(ctx, syncStats, redis)
 	busiGroupCache := memsto.NewBusiGroupCache(ctx, syncStats)
+	configCvalCache := memsto.NewCvalCache(ctx, syncStats)
 	idents := idents.New(ctx, redis)
 	metas := metas.New(redis)
 	writers := writer.NewWriters(config.Pushgw)
 	pushgwRouter := pushgwrt.New(config.HTTP, config.Pushgw, config.Alert, targetCache, busiGroupCache, idents, metas, writers, ctx)
-	r := httpx.GinEngine(config.Global.RunMode, config.HTTP)
+	r := httpx.GinEngine(config.Global.RunMode, config.HTTP, configCvalCache.PrintBodyPaths, configCvalCache.PrintAccessLog)
+
 	pushgwRouter.Config(r)
 
 	if !config.Alert.Disable {
@@ -71,6 +74,9 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 		taskTplsCache := memsto.NewTaskTplCache(ctx)
 
 		promClients := prom.NewPromClient(ctx)
+
+		dispatch.InitRegisterQueryFunc(promClients)
+
 		tdengineClients := tdengine.NewTdengineClient(ctx, config.Alert.Heartbeat)
 		externalProcessors := process.NewExternalProcessors()
 

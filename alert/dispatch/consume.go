@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -13,8 +14,10 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 	promsdk "github.com/ccfos/nightingale/v6/pkg/prom"
+	"github.com/ccfos/nightingale/v6/pkg/tplx"
 	"github.com/ccfos/nightingale/v6/prom"
 
+	"github.com/prometheus/common/model"
 	"github.com/toolkits/pkg/concurrent/semaphore"
 	"github.com/toolkits/pkg/logger"
 )
@@ -25,6 +28,18 @@ type Consumer struct {
 
 	dispatch    *Dispatch
 	promClients *prom.PromClientMap
+}
+
+func InitRegisterQueryFunc(promClients *prom.PromClientMap) {
+	tplx.RegisterQueryFunc(func(datasourceID int64, promql string) model.Value {
+		if promClients.IsNil(datasourceID) {
+			return nil
+		}
+
+		readerClient := promClients.GetCli(datasourceID)
+		value, _, _ := readerClient.Query(context.Background(), promql, time.Now())
+		return value
+	})
 }
 
 // 创建一个 Consumer 实例
@@ -113,7 +128,7 @@ func (e *Consumer) persist(event *models.AlertCurEvent) {
 		event.Id, err = poster.PostByUrlsWithResp[int64](e.ctx, "/v1/n9e/event-persist", event)
 		if err != nil {
 			logger.Errorf("event:%+v persist err:%v", event, err)
-			e.dispatch.Astats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", event.DatasourceId), "persist_event").Inc()
+			e.dispatch.Astats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", event.DatasourceId), "persist_event", event.GroupName, fmt.Sprintf("%v", event.RuleId)).Inc()
 		}
 		return
 	}
@@ -121,7 +136,7 @@ func (e *Consumer) persist(event *models.AlertCurEvent) {
 	err := models.EventPersist(e.ctx, event)
 	if err != nil {
 		logger.Errorf("event%+v persist err:%v", event, err)
-		e.dispatch.Astats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", event.DatasourceId), "persist_event").Inc()
+		e.dispatch.Astats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", event.DatasourceId), "persist_event", event.GroupName, fmt.Sprintf("%v", event.RuleId)).Inc()
 	}
 }
 
@@ -169,7 +184,7 @@ func (e *Consumer) queryRecoveryVal(event *models.AlertCurEvent) {
 		logger.Errorf("rule_eval:%s promql:%s, warnings:%v", getKey(event), promql, warnings)
 	}
 
-	anomalyPoints := common.ConvertAnomalyPoints(value)
+	anomalyPoints := models.ConvertAnomalyPoints(value)
 	if len(anomalyPoints) == 0 {
 		logger.Warningf("rule_eval:%s promql:%s, result is empty", getKey(event), promql)
 		event.AnnotationsJSON["recovery_promql_error"] = fmt.Sprintf("promql:%s error:%s", promql, "result is empty")

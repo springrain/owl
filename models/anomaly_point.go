@@ -1,22 +1,25 @@
-package common
+package models
 
 import (
 	"fmt"
 	"math"
 	"strings"
 
+	"github.com/ccfos/nightingale/v6/pkg/unit"
 	"github.com/prometheus/common/model"
 )
 
 type AnomalyPoint struct {
-	Key       string       `json:"key"`
-	Labels    model.Metric `json:"labels"`
-	Timestamp int64        `json:"timestamp"`
-	Value     float64      `json:"value"`
-	Severity  int          `json:"severity"`
-	Triggered bool         `json:"triggered"`
-	Query     string       `json:"query"`
-	Values    string       `json:"values"`
+	Key           string                         `json:"key"`
+	Labels        model.Metric                   `json:"labels"`
+	Timestamp     int64                          `json:"timestamp"`
+	Value         float64                        `json:"value"`
+	Severity      int                            `json:"severity"`
+	Triggered     bool                           `json:"triggered"`
+	Query         string                         `json:"query"`
+	Values        string                         `json:"values"`
+	ValuesUnit    map[string]unit.FormattedValue `json:"values_unit"`
+	RecoverConfig RecoverConfig                  `json:"recover_config"`
 }
 
 func NewAnomalyPoint(key string, labels map[string]string, ts int64, value float64, severity int) AnomalyPoint {

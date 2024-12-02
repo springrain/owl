@@ -152,9 +152,9 @@ func (bg *BusiGroup) Del(ctx *ctx.Context) error {
 	if has {
 		return errors.New("Some alert subscribes still in the BusiGroup")
 	}
-	finder = zorm.NewSelectFinder(TargetTableName, "count(*)").Append("WHERE group_id=?", bg.Id)
+	finder = zorm.NewSelectFinder(TargetBusiGroupTableName, "count(*)").Append("WHERE group_id=?", bg.Id)
 	has, err = Exists(ctx, finder)
-	//has, err = Exists(DB(ctx).Model(&Target{}).Where("group_id=?", bg.Id))
+	//has, err = Exists(DB(ctx).Model(&TargetBusiGroup{}).Where("group_id=?", bg.Id))
 	if err != nil {
 		return err
 	}

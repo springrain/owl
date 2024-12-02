@@ -78,15 +78,20 @@ func (c *IbexCallBacker) handleIbex(ctx *ctx.Context, url string, event *models.
 		return
 	}
 
-	tpl := c.taskTplCache.Get(id)
+	CallIbex(ctx, id, host, c.taskTplCache, c.targetCache, c.userCache, event)
+}
+
+func CallIbex(ctx *ctx.Context, id int64, host string,
+	taskTplCache *memsto.TaskTplCache, targetCache *memsto.TargetCacheType,
+	userCache *memsto.UserCacheType, event *models.AlertCurEvent) {
+	tpl := taskTplCache.Get(id)
 	if tpl == nil {
 		logger.Errorf("event_callback_ibex: no such tpl(%d)", id)
 		return
 	}
-
 	// check perm
 	// tpl.GroupId - host - account 三元组校验权限
-	can, err := canDoIbex(tpl.UpdateBy, tpl, host, c.targetCache, c.userCache)
+	can, err := canDoIbex(tpl.UpdateBy, tpl, host, targetCache, userCache)
 	if err != nil {
 		logger.Errorf("event_callback_ibex: check perm fail: %v", err)
 		return
@@ -104,7 +109,7 @@ func (c *IbexCallBacker) handleIbex(ctx *ctx.Context, url string, event *models.
 			continue
 		}
 
-		arr := strings.Split(pair, "=")
+		arr := strings.SplitN(pair, "=", 2)
 		if len(arr) != 2 {
 			continue
 		}
@@ -114,6 +119,7 @@ func (c *IbexCallBacker) handleIbex(ctx *ctx.Context, url string, event *models.
 	// 附加告警级别  告警触发值标签
 	tagsMap["alert_severity"] = strconv.Itoa(event.Severity)
 	tagsMap["alert_trigger_value"] = event.TriggerValue
+	tagsMap["is_recovered"] = strconv.FormatBool(event.IsRecovered)
 
 	tags, err := json.Marshal(tagsMap)
 	if err != nil {
@@ -177,10 +183,15 @@ func canDoIbex(username string, tpl *models.TaskTpl, host string, targetCache *m
 		return false, nil
 	}
 
-	return target.GroupId == tpl.GroupId, nil
+	return target.MatchGroupId(tpl.GroupId), nil
 }
 
 func TaskAdd(f models.TaskForm, authUser string, isCenter bool) (int64, error) {
+	if storage.Cache == nil {
+		logger.Warning("event_callback_ibex: redis cache is nil")
+		return 0, fmt.Errorf("redis cache is nil")
+	}
+
 	hosts := cleanHosts(f.Hosts)
 	if len(hosts) == 0 {
 		return 0, fmt.Errorf("arg(hosts) empty")

@@ -56,8 +56,8 @@ const (
 	Triggered = "triggered"
 )
 
-var (
-	body = feishuCard{
+func createFeishuCardBody() feishuCard {
+	return feishuCard{
 		feishu: feishu{Msgtype: "interactive"},
 		Card: Cards{
 			Config: Conf{
@@ -90,7 +90,7 @@ var (
 			},
 		},
 	}
-)
+}
 
 func (fs *FeishuCardSender) CallBack(ctx CallBackContext) {
 	if len(ctx.Events) == 0 || len(ctx.CallBackURL) == 0 {
@@ -121,6 +121,7 @@ func (fs *FeishuCardSender) CallBack(ctx CallBackContext) {
 	}
 
 	SendTitle := fmt.Sprintf("🔔 %s", ctx.Events[0].RuleName)
+	body := createFeishuCardBody()
 	body.Card.Header.Title.Content = SendTitle
 	body.Card.Header.Template = color
 	body.Card.Elements[0].Text.Content = message
@@ -134,14 +135,14 @@ func (fs *FeishuCardSender) CallBack(ctx CallBackContext) {
 	}
 	parsedURL.RawQuery = ""
 
-	doSend(parsedURL.String(), body, models.FeishuCard, ctx.Stats)
+	doSendAndRecord(ctx.Ctx, parsedURL.String(), parsedURL.String(), body, "callback", ctx.Stats, ctx.Events)
 }
 
 func (fs *FeishuCardSender) Send(ctx MessageContext) {
 	if len(ctx.Users) == 0 || len(ctx.Events) == 0 {
 		return
 	}
-	urls, _ := fs.extract(ctx.Users)
+	urls, tokens := fs.extract(ctx.Users)
 	message := BuildTplMessage(models.FeishuCard, fs.tpl, ctx.Events)
 	color := "red"
 	lowerUnicode := strings.ToLower(message)
@@ -152,18 +153,19 @@ func (fs *FeishuCardSender) Send(ctx MessageContext) {
 	}
 
 	SendTitle := fmt.Sprintf("🔔 %s", ctx.Events[0].RuleName)
+	body := createFeishuCardBody()
 	body.Card.Header.Title.Content = SendTitle
 	body.Card.Header.Template = color
 	body.Card.Elements[0].Text.Content = message
 	body.Card.Elements[2].Elements[0].Content = SendTitle
-	for _, url := range urls {
-		doSend(url, body, models.FeishuCard, ctx.Stats)
+	for i, url := range urls {
+		doSendAndRecord(ctx.Ctx, url, tokens[i], body, models.FeishuCard, ctx.Stats, ctx.Events)
 	}
 }
 
 func (fs *FeishuCardSender) extract(users []*models.User) ([]string, []string) {
 	urls := make([]string, 0, len(users))
-	ats := make([]string, 0)
+	tokens := make([]string, 0, len(users))
 	for i := range users {
 		if token, has := users[i].ExtractToken(models.FeishuCard); has {
 			url := token
@@ -171,7 +173,8 @@ func (fs *FeishuCardSender) extract(users []*models.User) ([]string, []string) {
 				url = "https://open.feishu.cn/open-apis/bot/v2/hook/" + strings.TrimSpace(token)
 			}
 			urls = append(urls, url)
+			tokens = append(tokens, token)
 		}
 	}
-	return urls, ats
+	return urls, tokens
 }

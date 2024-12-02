@@ -92,10 +92,12 @@ func (rt *Router) datasourceUpsert(c *gin.Context) {
 	var err error
 	var count int64
 
-	err = DatasourceCheck(req)
-	if err != nil {
-		Dangerous(c, err)
-		return
+	if !req.ForceSave {
+		err = DatasourceCheck(req)
+		if err != nil {
+			Dangerous(c, err)
+			return
+		}
 	}
 
 	if req.Id == 0 {
@@ -120,12 +122,14 @@ func (rt *Router) datasourceUpsert(c *gin.Context) {
 }
 
 func DatasourceCheck(ds models.Datasource) error {
-	if ds.HTTPJson.Url == "" {
-		return fmt.Errorf("url is empty")
-	}
+	if ds.PluginType != models.ELASTICSEARCH {
+		if ds.HTTPJson.Url == "" {
+			return fmt.Errorf("url is empty")
+		}
 
-	if !strings.HasPrefix(ds.HTTPJson.Url, "http") {
-		return fmt.Errorf("url must start with http or https")
+		if !strings.HasPrefix(ds.HTTPJson.Url, "http") {
+			return fmt.Errorf("url must start with http or https")
+		}
 	}
 
 	client := &http.Client{
@@ -136,11 +140,11 @@ func DatasourceCheck(ds models.Datasource) error {
 		},
 	}
 
-	fullURL := ds.HTTPJson.Url
-	req, err := http.NewRequest("GET", fullURL, nil)
+	var fullURL string
+	req, err := ds.HTTPJson.NewReq(&fullURL)
 	if err != nil {
 		logger.Errorf("Error creating request: %v", err)
-		return fmt.Errorf("request url:%s failed", fullURL)
+		return fmt.Errorf("request urls:%v failed", ds.HTTPJson.GetUrls())
 	}
 
 	if ds.PluginType == models.PROMETHEUS {
@@ -246,4 +250,38 @@ func (rt *Router) getDatasourceIds(c *gin.Context) {
 	datasourceIds, err := models.GetDatasourceIdsByEngineName(rt.Ctx, name)
 
 	ginx.NewRender(c).Data(datasourceIds, err)
+}
+
+type datasourceQueryForm struct {
+	Cate              string                   `json:"datasource_cate"`
+	DatasourceQueries []models.DatasourceQuery `json:"datasource_queries"`
+}
+
+type datasourceQueryResp struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (rt *Router) datasourceQuery(c *gin.Context) {
+	var dsf datasourceQueryForm
+	ginx.BindJSON(c, &dsf)
+	datasources, err := models.GetDatasourcesGetsByTypes(rt.Ctx, []string{dsf.Cate})
+	ginx.Dangerous(err)
+
+	nameToID := make(map[string]int64)
+	IDToName := make(map[int64]string)
+	for _, ds := range datasources {
+		nameToID[ds.Name] = ds.Id
+		IDToName[ds.Id] = ds.Name
+	}
+
+	ids := models.GetDatasourceIDsByDatasourceQueries(dsf.DatasourceQueries, IDToName, nameToID)
+	var req []datasourceQueryResp
+	for _, id := range ids {
+		req = append(req, datasourceQueryResp{
+			ID:   id,
+			Name: IDToName[id],
+		})
+	}
+	ginx.NewRender(c).Data(req, err)
 }

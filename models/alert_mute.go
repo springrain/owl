@@ -115,7 +115,7 @@ func AlertMuteGet(ctx *ctx.Context, where string, args ...interface{}) (*AlertMu
 	return lst[0], err
 }
 
-func AlertMuteGets(ctx *ctx.Context, prods []string, bgid int64, query string) ([]AlertMute, error) {
+func AlertMuteGets(ctx *ctx.Context, prods []string, bgid int64, disabled int, query string) ([]AlertMute, error) {
 	lst := make([]AlertMute, 0)
 
 	//session := DB(ctx)
@@ -129,6 +129,16 @@ func AlertMuteGets(ctx *ctx.Context, prods []string, bgid int64, query string) (
 	if len(prods) > 0 {
 		finder.Append("and prod in (?)", prods)
 		//session = session.Where("prod in (?)", prods)
+	}
+
+	if disabled != -1 {
+		if disabled == 0 {
+			finder.Append("and disabled = 0")
+			//session = session.Where("disabled = 0")
+		} else {
+			finder.Append("and disabled = 1")
+			//session = session.Where("disabled = 1")
+		}
 	}
 
 	if query != "" {
@@ -312,15 +322,6 @@ func AlertMuteStatistics(ctx *ctx.Context) (*Statistics, error) {
 		return s, err
 	}
 
-	// clean expired first
-	buf := int64(30)
-	finder := zorm.NewDeleteFinder(AlertMuteTableName).Append("WHERE etime < ? and mute_time_type = 0", time.Now().Unix()-buf)
-	err := UpdateFinder(ctx, finder)
-	//err := DB(ctx).Where("etime < ? and mute_time_type = 0", time.Now().Unix()-buf).Delete(new(AlertMute)).Error
-	if err != nil {
-		return nil, err
-	}
-
 	return StatisticsGet(ctx, AlertMuteTableName)
 	/*
 		session := DB(ctx).Model(&AlertMute{}).Select("count(*) as total", "max(update_at) as last_updated")
@@ -339,7 +340,7 @@ func AlertMuteGetsAll(ctx *ctx.Context) ([]*AlertMute, error) {
 	//var lst []*AlertMute
 	lst := make([]*AlertMute, 0)
 	if !ctx.IsCenter {
-		lst, err := poster.GetByUrls[[]*AlertMute](ctx, "/v1/n9e/alert-mutes")
+		lst, err := poster.GetByUrls[[]*AlertMute](ctx, "/v1/n9e/alert-mutes?disabled=0")
 		if err != nil {
 			return nil, err
 		}
@@ -349,7 +350,7 @@ func AlertMuteGetsAll(ctx *ctx.Context) ([]*AlertMute, error) {
 		return lst, err
 	}
 
-	finder := zorm.NewSelectFinder(AlertMuteTableName)
+	finder := zorm.NewSelectFinder(AlertMuteTableName).Append("WHERE disabled = 0")
 	//session := DB(ctx).Model(&AlertMute{})
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := session.Find(&lst).Error

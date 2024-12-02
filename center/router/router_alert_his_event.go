@@ -54,13 +54,17 @@ func (rt *Router) alertHisEventsList(c *gin.Context) {
 		cates = strings.Split(cate, ",")
 	}
 
+	ruleId := ginx.QueryInt64(c, "rid", 0)
+
 	bgids, err := GetBusinessGroupIds(c, rt.Ctx, rt.Center.EventHistoryGroupView)
 	ginx.Dangerous(err)
 
-	total, err := models.AlertHisEventTotal(rt.Ctx, prods, bgids, stime, etime, severity, recovered, dsIds, cates, query)
+	total, err := models.AlertHisEventTotal(rt.Ctx, prods, bgids, stime, etime, severity,
+		recovered, dsIds, cates, ruleId, query)
 	ginx.Dangerous(err)
 
-	list, err := models.AlertHisEventGets(rt.Ctx, prods, bgids, stime, etime, severity, recovered, dsIds, cates, query, limit, ginx.Offset(c, limit))
+	list, err := models.AlertHisEventGets(rt.Ctx, prods, bgids, stime, etime, severity, recovered,
+		dsIds, cates, ruleId, query, limit, ginx.Offset(c, limit))
 	ginx.Dangerous(err)
 
 	cache := make(map[int64]*models.UserGroup)
@@ -85,6 +89,11 @@ func (rt *Router) alertHisEventGet(c *gin.Context) {
 
 	if !rt.Center.AnonymousAccess.AlertDetail && rt.Center.EventHistoryGroupView {
 		rt.bgroCheck(c, event.GroupId)
+	}
+
+	ruleConfig, needReset := models.FillRuleConfigTplName(rt.Ctx, event.RuleConfig)
+	if needReset {
+		event.RuleConfigJson = ruleConfig
 	}
 
 	ginx.NewRender(c).Data(event, err)

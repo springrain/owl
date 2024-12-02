@@ -13,6 +13,8 @@ type Center struct {
 	UseFileAssets          bool
 	FlashDuty              FlashDuty
 	EventHistoryGroupView  bool
+	CleanNotifyRecordDay   int
+	MigrateBusiGroupLabel  bool
 }
 
 type Plugin struct {

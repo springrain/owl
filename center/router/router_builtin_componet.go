@@ -1,12 +1,17 @@
 package router
 
 import (
+	"context"
 	"net/http"
 
+	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/models"
+
 	"github.com/gin-gonic/gin"
 	"github.com/toolkits/pkg/ginx"
 )
+
+const SYSTEM = "system"
 
 func (rt *Router) builtinComponentsAdd(c *gin.Context) {
 	var lst []models.BuiltinComponent
@@ -50,10 +55,27 @@ func (rt *Router) builtinComponentsPut(c *gin.Context) {
 		return
 	}
 
+	if bc.CreatedBy == SYSTEM {
+		req.Ident = bc.Ident
+	}
+
 	username := Username(c)
 	req.UpdatedBy = username
 
-	ginx.NewRender(c).Message(bc.Update(rt.Ctx, req))
+	_, err = zorm.Transaction(rt.Ctx.Ctx, func(ctx context.Context) (interface{}, error) {
+		rt.Ctx.Ctx = ctx
+		txErr := models.BuiltinMetricBatchUpdateColumn(rt.Ctx, "typ", bc.Ident, req.Ident, req.UpdatedBy)
+		if txErr != nil {
+			return nil, txErr
+		}
+		txErr = bc.Update(rt.Ctx, req)
+		if txErr != nil {
+			return nil, txErr
+		}
+		return nil, txErr
+	})
+
+	ginx.NewRender(c).Message(err)
 }
 
 func (rt *Router) builtinComponentsDel(c *gin.Context) {

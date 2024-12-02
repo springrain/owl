@@ -62,15 +62,18 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 	userCache := memsto.NewUserCache(ctx, syncStats)
 	userGroupCache := memsto.NewUserGroupCache(ctx, syncStats)
 	taskTplsCache := memsto.NewTaskTplCache(ctx)
+	configCvalCache := memsto.NewCvalCache(ctx, syncStats)
 
 	promClients := prom.NewPromClient(ctx)
+	dispatch.InitRegisterQueryFunc(promClients)
 	tdengineClients := tdengine.NewTdengineClient(ctx, config.Alert.Heartbeat)
 
 	externalProcessors := process.NewExternalProcessors()
 
 	Start(config.Alert, config.Pushgw, syncStats, alertStats, externalProcessors, targetCache, busiGroupCache, alertMuteCache, alertRuleCache, notifyConfigCache, taskTplsCache, dsCache, ctx, promClients, tdengineClients, userCache, userGroupCache)
 
-	r := httpx.GinEngine(config.Global.RunMode, config.HTTP)
+	r := httpx.GinEngine(config.Global.RunMode, config.HTTP,
+		configCvalCache.PrintBodyPaths, configCvalCache.PrintAccessLog)
 	rt := router.New(config.HTTP, config.Alert, alertMuteCache, targetCache, busiGroupCache, alertStats, ctx, externalProcessors)
 
 	if config.Ibex.Enable {
@@ -100,7 +103,7 @@ func Start(alertc aconf.Alert, pushgwc pconf.Pushgw, syncStats *memsto.Stats, al
 	naming := naming.NewNaming(ctx, alertc.Heartbeat, alertStats)
 
 	writers := writer.NewWriters(pushgwc)
-	record.NewScheduler(alertc, recordingRuleCache, promClients, writers, alertStats)
+	record.NewScheduler(alertc, recordingRuleCache, promClients, writers, alertStats, datasourceCache)
 
 	eval.NewScheduler(alertc, externalProcessors, alertRuleCache, targetCache, targetsOfAlertRulesCache,
 		busiGroupCache, alertMuteCache, datasourceCache, promClients, tdendgineClients, naming, ctx, alertStats)
@@ -112,5 +115,5 @@ func Start(alertc aconf.Alert, pushgwc pconf.Pushgw, syncStats *memsto.Stats, al
 	go consumer.LoopConsume()
 
 	go queue.ReportQueueSize(alertStats)
-	go sender.InitEmailSender(notifyConfigCache)
+	go sender.InitEmailSender(ctx, notifyConfigCache)
 }

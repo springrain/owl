@@ -7,6 +7,7 @@ import (
 
 	"github.com/ccfos/nightingale/v6/alert/astats"
 	"github.com/ccfos/nightingale/v6/models"
+	"github.com/ccfos/nightingale/v6/pkg/ctx"
 
 	"github.com/toolkits/pkg/logger"
 )
@@ -38,11 +39,11 @@ func (ms *MmSender) Send(ctx MessageContext) {
 	}
 	message := BuildTplMessage(models.Mm, ms.tpl, ctx.Events)
 
-	SendMM(MatterMostMessage{
+	SendMM(ctx.Ctx, MatterMostMessage{
 		Text:   message,
 		Tokens: urls,
 		Stats:  ctx.Stats,
-	})
+	}, ctx.Events, models.Mm)
 }
 
 func (ms *MmSender) CallBack(ctx CallBackContext) {
@@ -51,13 +52,11 @@ func (ms *MmSender) CallBack(ctx CallBackContext) {
 	}
 	message := BuildTplMessage(models.Mm, ms.tpl, ctx.Events)
 
-	SendMM(MatterMostMessage{
+	SendMM(ctx.Ctx, MatterMostMessage{
 		Text:   message,
 		Tokens: []string{ctx.CallBackURL},
 		Stats:  ctx.Stats,
-	})
-
-	ctx.Stats.AlertNotifyTotal.WithLabelValues("rule_callback").Inc()
+	}, ctx.Events, "callback")
 }
 
 func (ms *MmSender) extract(users []*models.User) []string {
@@ -70,11 +69,12 @@ func (ms *MmSender) extract(users []*models.User) []string {
 	return tokens
 }
 
-func SendMM(message MatterMostMessage) {
+func SendMM(ctx *ctx.Context, message MatterMostMessage, events []*models.AlertCurEvent, channel string) {
 	for i := 0; i < len(message.Tokens); i++ {
 		u, err := url.Parse(message.Tokens[i])
 		if err != nil {
 			logger.Errorf("mm_sender: failed to parse error=%v", err)
+			NotifyRecord(ctx, events, channel, message.Tokens[i], "", err)
 			continue
 		}
 
@@ -103,7 +103,7 @@ func SendMM(message MatterMostMessage) {
 				Username: username,
 				Text:     txt + message.Text,
 			}
-			doSend(ur, body, models.Mm, message.Stats)
+			doSendAndRecord(ctx, ur, message.Tokens[i], body, channel, message.Stats, events)
 		}
 	}
 }

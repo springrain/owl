@@ -17,6 +17,12 @@ import (
 const SYSTEM = "system"
 
 func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
+	err := models.InitBuiltinPayloads(ctx)
+	if err != nil {
+		logger.Warning("init old builtinPayloads fail ", err)
+		return
+	}
+
 	fp := builtinIntegrationsDir
 	if fp == "" {
 		fp = path.Join(runner.Cwd, "integrations")
@@ -94,6 +100,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 					logger.Warning("update builtin component fail ", old, err)
 				}
 			}
+			component.ID = old.ID
 		}
 
 		// delete uuid is emtpy
@@ -112,6 +119,15 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 		//err = models.DB(ctx).Exec("delete from builtin_metrics where uuid = 0 and (updated_by = 'system' or updated_by = '')").Error
 		if err != nil {
 			logger.Warning("delete builtin metrics fail ", err)
+		}
+
+		finder := zorm.NewFinder()
+		finder.Append("delete from builtin_payloads where uuid%1000 != 0 and uuid > 1000000000000000000 and type = ? and updated_by = ?", "dashboard", "system")
+		err = models.UpdateFinder(ctx, finder)
+		// 删除 uuid%1000 不为 0 uuid > 1000000000000000000 且 type 为 dashboard 的记录
+		//err = models.DB(ctx).Exec("delete from builtin_payloads where uuid%1000 != 0 and uuid > 1000000000000000000 and type = 'dashboard' and updated_by = 'system'").Error
+		if err != nil {
+			logger.Warning("delete builtin payloads fail ", err)
 		}
 
 		// alerts
@@ -149,13 +165,13 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 
 					cate := strings.Replace(f, ".json", "", -1)
 					builtinAlert := models.BuiltinPayload{
-						Component: component.Ident,
-						Type:      "alert",
-						Cate:      cate,
-						Name:      alert.Name,
-						Tags:      alert.AppendTags,
-						Content:   string(content),
-						UUID:      alert.UUID,
+						ComponentID: component.ID,
+						Type:        "alert",
+						Cate:        cate,
+						Name:        alert.Name,
+						Tags:        alert.AppendTags,
+						Content:     string(content),
+						UUID:        alert.UUID,
 					}
 
 					old, err := models.BuiltinPayloadGet(ctx, "uuid = ?", alert.UUID)
@@ -173,6 +189,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 					}
 
 					if old.UpdatedBy == SYSTEM {
+						old.ComponentID = component.ID
 						old.Content = string(content)
 						old.Name = alert.Name
 						old.Tags = alert.AppendTags
@@ -219,7 +236,8 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 				}
 
 				if dashboard.UUID == 0 {
-					dashboard.UUID = time.Now().UnixNano()
+					time.Sleep(time.Microsecond)
+					dashboard.UUID = time.Now().UnixMicro()
 					// 补全文件中的 uuid
 					bs, err = json.MarshalIndent(dashboard, "", "    ")
 					if err != nil {
@@ -240,13 +258,13 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 				}
 
 				builtinDashboard := models.BuiltinPayload{
-					Component: component.Ident,
-					Type:      "dashboard",
-					Cate:      "",
-					Name:      dashboard.Name,
-					Tags:      dashboard.Tags,
-					Content:   string(content),
-					UUID:      dashboard.UUID,
+					ComponentID: component.ID,
+					Type:        "dashboard",
+					Cate:        "",
+					Name:        dashboard.Name,
+					Tags:        dashboard.Tags,
+					Content:     string(content),
+					UUID:        dashboard.UUID,
 				}
 
 				old, err := models.BuiltinPayloadGet(ctx, "uuid = ?", dashboard.UUID)
@@ -264,6 +282,7 @@ func Init(ctx *ctx.Context, builtinIntegrationsDir string) {
 				}
 
 				if old.UpdatedBy == SYSTEM {
+					old.ComponentID = component.ID
 					old.Content = string(content)
 					old.Name = dashboard.Name
 					old.Tags = dashboard.Tags

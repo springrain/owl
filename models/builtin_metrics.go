@@ -251,3 +251,14 @@ func BuiltinMetricCollectors(ctx *ctx.Context, lang, typ, query string) ([]strin
 	//err := session.Select("distinct(collector)").Pluck("collector", &collectors).Error
 	return collectors, err
 }
+
+func BuiltinMetricBatchUpdateColumn(ctx *ctx.Context, col, old, new, updatedBy string) error {
+	if old == new {
+		return nil
+	}
+
+	finder := zorm.NewUpdateFinder(BuiltinMetricTableName)
+	finder.Append(col+"=?,updated_by=? WHERE "+col+"=?", new, updatedBy, old)
+	return UpdateFinder(ctx, finder)
+	//return DB(ctx).Model(&BuiltinMetric{}).Where(fmt.Sprintf("%s = ?", col), old).Updates(map[string]interface{}{col: new, "updated_by": updatedBy}).Error
+}

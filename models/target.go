@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"gitee.com/chunanyong/zorm"
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
+	"golang.org/x/exp/slices"
 
 	"github.com/pkg/errors"
 	"github.com/toolkits/pkg/container/set"
@@ -16,12 +18,13 @@ import (
 
 const TargetTableName = "target"
 
+type TargetDeleteHookFunc func(ctx *ctx.Context, idents []string) error
 type Target struct {
 	// 引入默认的struct,隔离IEntityStruct的方法改动
 	zorm.EntityStruct
 	Id           int64             `json:"id" column:"id"`
 	GroupId      int64             `json:"group_id" column:"group_id"`
-	GroupObj     *BusiGroup        `json:"group_obj"`
+	GroupObjs    []*BusiGroup      `json:"group_objs"`
 	Ident        string            `json:"ident" column:"ident"`
 	Note         string            `json:"note" column:"note"`
 	Tags         string            `json:"-" column:"tags"`
@@ -31,15 +34,19 @@ type Target struct {
 	HostIp       string            `json:"host_ip" column:"host_ip"` //ipv4，do not needs range select
 	AgentVersion string            `json:"agent_version" column:"agent_version"`
 	EngineName   string            `json:"engine_name" column:"engine_name"`
+	OS           string            `json:"os"`
+	HostTags     string            `json:"-" column:"host_tags"`
+	HostTagsJson []string          `json:"host_tags"`
 	UnixTime     int64             `json:"unixtime"`
 	Offset       int64             `json:"offset"`
 	TargetUp     float64           `json:"target_up"`
 	MemUtil      float64           `json:"mem_util"`
 	CpuNum       int               `json:"cpu_num"`
 	CpuUtil      float64           `json:"cpu_util"`
-	OS           string            `json:"os"`
 	Arch         string            `json:"arch"`
 	RemoteAddr   string            `json:"remote_addr"`
+	GroupIds     []int64           `json:"group_ids"`
+	GroupNames   []string          `json:"group_names"`
 }
 
 func (t *Target) GetTableName() string {
@@ -47,24 +54,58 @@ func (t *Target) GetTableName() string {
 }
 
 func (t *Target) FillGroup(ctx *ctx.Context, cache map[int64]*BusiGroup) error {
-	if t.GroupId <= 0 {
-		return nil
+	var err error
+	if len(t.GroupIds) == 0 {
+		t.GroupIds, err = TargetGroupIdsGetByIdent(ctx, t.Ident)
+		if err != nil {
+			return errors.WithMessage(err, "failed to get target gids")
+		}
+		t.GroupObjs = make([]*BusiGroup, 0, len(t.GroupIds))
 	}
 
-	bg, has := cache[t.GroupId]
-	if has {
-		t.GroupObj = bg
-		return nil
+	for _, gid := range t.GroupIds {
+		bg, has := cache[gid]
+		if has && bg != nil {
+			t.GroupObjs = append(t.GroupObjs, bg)
+			continue
+		}
+
+		bg, err := BusiGroupGetById(ctx, gid)
+		if err != nil {
+			return errors.WithMessage(err, "failed to get busi group")
+		}
+
+		if bg == nil {
+			continue
+		}
+
+		t.GroupObjs = append(t.GroupObjs, bg)
+		cache[gid] = bg
 	}
 
-	bg, err := BusiGroupGetById(ctx, t.GroupId)
-	if err != nil {
-		return errors.WithMessage(err, "failed to get busi group")
-	}
-
-	t.GroupObj = bg
-	cache[t.GroupId] = bg
 	return nil
+}
+
+func (t *Target) MatchGroupId(gid ...int64) bool {
+	for _, tgId := range t.GroupIds {
+		for _, id := range gid {
+			if tgId == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (t *Target) AfterFind(tx *zorm.Finder) (err error) {
+	delta := time.Now().Unix() - t.UpdateAt
+	if delta < 60 {
+		t.TargetUp = 2
+	} else if delta < 180 {
+		t.TargetUp = 1
+	}
+	t.FillTagsMap()
+	return
 }
 
 func TargetStatistics(ctx *ctx.Context) (*Statistics, error) {
@@ -84,21 +125,41 @@ func TargetStatistics(ctx *ctx.Context) (*Statistics, error) {
 	*/
 }
 
-func TargetDel(ctx *ctx.Context, idents []string) error {
+func TargetDel(ctx *ctx.Context, idents []string, deleteHook TargetDeleteHookFunc) error {
 	if len(idents) == 0 {
 		panic("idents empty")
 	}
-	finder := zorm.NewDeleteFinder(TargetTableName).Append("WHERE ident in (?)", idents)
-	return UpdateFinder(ctx, finder)
-	//return DB(ctx).Where("ident in ?", idents).Delete(new(Target)).Error
+
+	_, err := zorm.Transaction(ctx.Ctx, func(ctxC context.Context) (interface{}, error) {
+		finder := zorm.NewDeleteFinder(TargetTableName).Append("WHERE ident in (?)", idents)
+		_, err := zorm.UpdateFinder(ctxC, finder)
+		if err != nil {
+			return nil, err
+		}
+		err = deleteHook(ctx, idents)
+		if err != nil {
+			return nil, err
+		}
+		err = TargetDeleteBgids(ctx, idents)
+		return nil, err
+	})
+
+	return err
+
 }
 
 type BuildTargetWhereOption func(finder *zorm.Finder) *zorm.Finder
 
 func BuildTargetWhereWithBgids(bgids []int64) BuildTargetWhereOption {
 	return func(finder *zorm.Finder) *zorm.Finder {
-		if len(bgids) > 0 {
-			finder = finder.Append(" and group_id in (?)", bgids)
+		if len(bgids) == 1 && bgids[0] == 0 {
+			finder.Append("left join target_busi_group on target.ident = target_busi_group.target_ident WHERE target_busi_group.target_ident is null")
+		} else if len(bgids) > 0 {
+			if slices.Contains(bgids, 0) {
+				finder.Append("left join target_busi_group on target.ident = target_busi_group.target_ident WHERE target_busi_group.target_ident is null OR target_busi_group.group_id in (?)", bgids)
+			} else {
+				finder.Append("join target_busi_group on target.ident = target_busi_group.target_ident WHERE target_busi_group.group_id in (?)", bgids)
+			}
 		}
 		return finder
 	}
@@ -113,13 +174,22 @@ func BuildTargetWhereWithDsIds(dsIds []int64) BuildTargetWhereOption {
 	}
 }
 
+func BuildTargetWhereWithHosts(hosts []string) BuildTargetWhereOption {
+	return func(finder *zorm.Finder) *zorm.Finder {
+		if len(hosts) > 0 {
+			finder = finder.Append(" and (ident in (?) or host_ip in (?))", hosts, hosts)
+		}
+		return finder
+	}
+}
+
 func BuildTargetWhereWithQuery(query string) BuildTargetWhereOption {
 	return func(finder *zorm.Finder) *zorm.Finder {
 		if query != "" {
 			arr := strings.Fields(query)
 			for i := 0; i < len(arr); i++ {
 				q := "%" + arr[i] + "%"
-				finder = finder.Append(" and (ident like ? or note like ? or tags like ?)", q, q, q)
+				finder = finder.Append(" and (ident like ? or host_ip like ? or note like ? or tags like ? or host_tags like ? or os like ?)", q, q, q, q, q, q)
 			}
 		}
 		return finder
@@ -129,14 +199,14 @@ func BuildTargetWhereWithQuery(query string) BuildTargetWhereOption {
 func BuildTargetWhereWithDowntime(downtime int64) BuildTargetWhereOption {
 	return func(finder *zorm.Finder) *zorm.Finder {
 		if downtime > 0 {
-			finder = finder.Append(" and update_at < ?", time.Now().Unix()-downtime)
+			finder = finder.Append(" and target.update_at < ?", time.Now().Unix()-downtime)
 		}
 		return finder
 	}
 }
 
 func buildTargetWhere(ctx *ctx.Context, selectField string, options ...BuildTargetWhereOption) *zorm.Finder {
-	finder := zorm.NewSelectFinder(TargetTableName, selectField).Append("WHERE 1=1")
+	finder := zorm.NewSelectFinder(TargetTableName, selectField)
 	//session := DB(ctx).Model(&Target{})
 	finder.SelectTotalCount = false
 
@@ -167,7 +237,7 @@ func TargetGets(ctx *ctx.Context, limit, offset int, order string, desc bool, op
 		order += " asc"
 	}
 	finder := buildTargetWhere(ctx, "*", options...)
-	finder.Append(order)
+	finder.Append(" order by " + order)
 	page := zorm.NewPage()
 	page.PageSize = limit
 	page.PageNo = offset / limit
@@ -178,12 +248,13 @@ func TargetGets(ctx *ctx.Context, limit, offset int, order string, desc bool, op
 // 根据 groupids, tags, hosts 查询 targets
 func TargetGetsByFilter(ctx *ctx.Context, query []map[string]interface{}, limit, offset int) ([]*Target, error) {
 	lst := make([]*Target, 0)
-	finder, page := TargetFilterQueryBuild(ctx, "*", query, limit, offset)
-	finder.Append("order by ident asc ")
+	finder, page := TargetFilterQueryBuild(ctx, "target.*", query, limit, offset)
+	finder.Append("order by target.ident asc ")
 	err := zorm.Query(ctx.Ctx, finder, &lst, page)
 	cache := make(map[int64]*BusiGroup)
 	for i := 0; i < len(lst); i++ {
 		lst[i].TagsJSON = strings.Fields(lst[i].Tags)
+		lst[i].HostTagsJson = strings.Fields(lst[i].HostTags)
 		lst[i].FillGroup(ctx, cache)
 	}
 
@@ -198,10 +269,10 @@ func TargetCountByFilter(ctx *ctx.Context, query []map[string]interface{}) (int6
 
 func MissTargetGetsByFilter(ctx *ctx.Context, query []map[string]interface{}, ts int64) ([]*Target, error) {
 	lst := make([]*Target, 0)
-	finder, page := TargetFilterQueryBuild(ctx, "*", query, 0, 0)
-	finder.Append("and update_at < ?", ts)
+	finder, page := TargetFilterQueryBuild(ctx, "target.*", query, 0, 0)
+	finder.Append("and target.update_at < ?", ts)
 	//session = session.Where("update_at < ?", ts)
-	finder.Append("order by ident asc")
+	finder.Append("order by target.ident asc")
 	err := zorm.Query(ctx.Ctx, finder, &lst, page)
 	//err := session.Order("ident").Find(&lst).Error
 	return lst, err
@@ -209,14 +280,15 @@ func MissTargetGetsByFilter(ctx *ctx.Context, query []map[string]interface{}, ts
 
 func MissTargetCountByFilter(ctx *ctx.Context, query []map[string]interface{}, ts int64) (int64, error) {
 	finder, _ := TargetFilterQueryBuild(ctx, "count(*)", query, 0, 0)
-	finder.Append("and update_at < ?", ts)
+	finder.Append("and target.update_at < ?", ts)
 	return Count(ctx, finder)
 	//session = session.Where("update_at < ?", ts)
 	//return Count(session)
 }
 
 func TargetFilterQueryBuild(ctx *ctx.Context, selectField string, query []map[string]interface{}, limit, offset int) (*zorm.Finder, *zorm.Page) {
-	finder := zorm.NewSelectFinder(TargetTableName, selectField).Append("WHERE 1=1")
+	finder := zorm.NewSelectFinder(TargetTableName, selectField).Append("left join " +
+		"target_busi_group on target.ident = target_busi_group.target_ident").Append("WHERE 1=1")
 	finder.SelectTotalCount = false
 	if len(query) > 0 {
 		finder.Append("and (1=1 ")
@@ -234,6 +306,8 @@ func TargetFilterQueryBuild(ctx *ctx.Context, selectField string, query []map[st
 		finder.Append(")")
 	}
 	var page *zorm.Page
+
+	//session := DB(ctx).Model(&Target{}).Where("ident in (?)", sub)
 
 	if limit > 0 {
 		page = zorm.NewPage()
@@ -255,9 +329,20 @@ func TargetGetsAll(ctx *ctx.Context) ([]*Target, error) {
 	finder := zorm.NewSelectFinder(TargetTableName)
 	err := zorm.Query(ctx.Ctx, finder, &lst, nil)
 	//err := DB(ctx).Model(&Target{}).Find(&lst).Error
+	if err != nil {
+		return lst, err
+	}
+
+	tgs, err := TargetBusiGroupsGetAll(ctx)
+	if err != nil {
+		return lst, err
+	}
+
 	for i := 0; i < len(lst); i++ {
 		lst[i].FillTagsMap()
+		lst[i].GroupIds = tgs[lst[i].Ident]
 	}
+
 	return lst, err
 }
 
@@ -306,6 +391,7 @@ func TargetGet(ctx *ctx.Context, where string, args ...interface{}) (*Target, er
 	}
 
 	lst[0].TagsJSON = strings.Fields(lst[0].Tags)
+	lst[0].HostTagsJson = strings.Fields(lst[0].HostTags)
 
 	return lst[0], nil
 }
@@ -381,11 +467,11 @@ func TargetsGetIdentsByIdentsAndHostIps(ctx *ctx.Context, idents, hostIps []stri
 	return inexistence, identSet.ToSlice(), nil
 }
 
-func TargetGetTags(ctx *ctx.Context, idents []string) ([]string, error) {
-	finder := zorm.NewSelectFinder(TargetTableName, "DISTINCT tags")
+func TargetGetTags(ctx *ctx.Context, idents []string, ignoreHostTag bool) ([]string, error) {
+	finder := zorm.NewSelectFinder(TargetTableName, "tags,host_tags")
 	//session := DB(ctx).Model(new(Target))
 
-	arr := make([]string, 0)
+	arr := make([]*Target, 0)
 	if len(idents) > 0 {
 		//session = session.Where("ident in ?", idents)
 		finder.Append("WHERE ident in (?)", idents)
@@ -403,9 +489,15 @@ func TargetGetTags(ctx *ctx.Context, idents []string) ([]string, error) {
 
 	set := make(map[string]struct{})
 	for i := 0; i < cnt; i++ {
-		tags := strings.Fields(arr[i])
+		tags := strings.Fields(arr[i].Tags)
 		for j := 0; j < len(tags); j++ {
 			set[tags[j]] = struct{}{}
+		}
+
+		if !ignoreHostTag {
+			for _, ht := range arr[i].HostTagsJson {
+				set[ht] = struct{}{}
+			}
 		}
 	}
 
@@ -458,7 +550,8 @@ func (t *Target) FillTagsMap() {
 	t.TagsJSON = strings.Fields(t.Tags)
 	t.TagsMap = make(map[string]string)
 	m := make(map[string]string)
-	for _, item := range t.TagsJSON {
+	allTags := append(t.TagsJSON, t.HostTagsJson...)
+	for _, item := range allTags {
 		arr := strings.Split(item, "=")
 		if len(arr) != 2 {
 			continue
@@ -473,6 +566,16 @@ func (t *Target) GetTagsMap() map[string]string {
 	tagsJSON := strings.Fields(t.Tags)
 	m := make(map[string]string)
 	for _, item := range tagsJSON {
+		if arr := strings.Split(item, "="); len(arr) == 2 {
+			m[arr[0]] = arr[1]
+		}
+	}
+	return m
+}
+
+func (t *Target) GetHostTagsMap() map[string]string {
+	m := make(map[string]string)
+	for _, item := range t.HostTagsJson {
 		arr := strings.Split(item, "=")
 		if len(arr) != 2 {
 			continue
@@ -488,7 +591,6 @@ func (t *Target) FillMeta(meta *HostMeta) {
 	t.CpuNum = meta.CpuNum
 	t.UnixTime = meta.UnixTime
 	t.Offset = meta.Offset
-	t.OS = meta.OS
 	t.Arch = meta.Arch
 	t.RemoteAddr = meta.RemoteAddr
 }
@@ -547,4 +649,93 @@ func (m *Target) UpdateFieldsMap(ctx *ctx.Context, fields map[string]interface{}
 	})
 	return err
 	//return DB(ctx).Model(m).Updates(fields).Error
+}
+
+// 1. 是否可以进行 busi_group 迁移
+func CanMigrateBg(ctx *ctx.Context) bool {
+	// 1.1 检查 target 表是否为空
+	var cnt int64
+	finder := zorm.NewSelectFinder(TargetTableName, "count(*)")
+	cnt, err := Count(ctx, finder)
+	if err != nil {
+		log.Println("failed to get target table count, err:", err)
+		return false
+	}
+	if cnt == 0 {
+		log.Println("target table is empty, skip migration.")
+		return false
+	}
+
+	// 1.2 判断是否已经完成迁移
+	var maxGroupId int64
+	finderMax := zorm.NewSelectFinder(TargetTableName, "MAX(group_id)")
+	_, err = zorm.QueryRow(ctx.Ctx, finderMax, &maxGroupId)
+	if err != nil {
+		log.Println("failed to get max group_id from target table, err:", err)
+		return false
+	}
+
+	if maxGroupId == 0 {
+		return false
+	}
+
+	return true
+}
+
+func MigrateBg(ctx *ctx.Context, bgLabelKey string) {
+	err := DoMigrateBg(ctx, bgLabelKey)
+	if err != nil {
+		log.Println("failed to migrate bgid, err:", err)
+		return
+	}
+
+	log.Println("migration bgid has been completed")
+}
+
+func DoMigrateBg(ctx *ctx.Context, bgLabelKey string) error {
+	// 2. 获取全量 target
+	targets, err := TargetGetsAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 3. 获取全量 busi_group
+	bgs, err := BusiGroupGetAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	bgById := make(map[int64]*BusiGroup, len(bgs))
+	for _, bg := range bgs {
+		bgById[bg.Id] = bg
+	}
+
+	// 4. 如果某 busi_group 有 label，将其存至对应的 target tags 中
+	for _, t := range targets {
+		if t.GroupId == 0 {
+			continue
+		}
+		_, err := zorm.Transaction(ctx.Ctx, func(txctx context.Context) (interface{}, error) {
+			// 4.1 将 group_id 迁移至关联表
+			if err := TargetBindBgids(ctx, []string{t.Ident}, []int64{t.GroupId}); err != nil {
+				return nil, err
+			}
+			if err := TargetUpdateBgid(ctx, []string{t.Ident}, 0, false); err != nil {
+				return nil, err
+			}
+
+			// 4.2 判断该机器是否需要新增 tag
+			if bg, ok := bgById[t.GroupId]; !ok || bg.LabelEnable == 0 ||
+				strings.Contains(t.Tags, bgLabelKey+"=") {
+				return nil, err
+			} else {
+				return nil, t.AddTags(ctx, []string{bgLabelKey + "=" + bg.LabelValue})
+			}
+		})
+		if err != nil {
+			log.Printf("failed to migrate %v bg, err: %v\n", t.Ident, err)
+			continue
+		}
+	}
+	return nil
 }

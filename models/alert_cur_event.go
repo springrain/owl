@@ -13,6 +13,7 @@ import (
 	"github.com/ccfos/nightingale/v6/pkg/ctx"
 	"github.com/ccfos/nightingale/v6/pkg/poster"
 	"github.com/ccfos/nightingale/v6/pkg/tplx"
+	"github.com/ccfos/nightingale/v6/pkg/unit"
 
 	"github.com/toolkits/pkg/logger"
 )
@@ -21,56 +22,65 @@ const AlertCurEventTableName = "alert_cur_event"
 
 type AlertCurEvent struct {
 	zorm.EntityStruct
-	Id                 int64             `json:"id" column:"id"`
-	Cate               string            `json:"cate" column:"cate"`
-	Cluster            string            `json:"cluster" column:"cluster"`
-	DatasourceId       int64             `json:"datasource_id" column:"datasource_id"`
-	GroupId            int64             `json:"group_id" column:"group_id"`     // busi group id
-	GroupName          string            `json:"group_name" column:"group_name"` // busi group name
-	Hash               string            `json:"hash" column:"hash"`             // rule_id + vector_key
-	RuleId             int64             `json:"rule_id" column:"rule_id"`
-	RuleName           string            `json:"rule_name" column:"rule_name"`
-	RuleNote           string            `json:"rule_note" column:"rule_note"`
-	RuleProd           string            `json:"rule_prod" column:"rule_prod"`
-	RuleAlgo           string            `json:"rule_algo" column:"rule_algo"`
-	Severity           int               `json:"severity" column:"severity"`
-	PromForDuration    int               `json:"prom_for_duration" column:"prom_for_duration"`
-	PromQl             string            `json:"prom_ql" column:"prom_ql"`
-	RuleConfig         string            `json:"-" column:"rule_config"` // rule config
-	RuleConfigJson     interface{}       `json:"rule_config"`            // rule config for fe
-	PromEvalInterval   int               `json:"prom_eval_interval" column:"prom_eval_interval"`
-	Callbacks          string            `json:"-" column:"callbacks"` // for db
-	CallbacksJSON      []string          `json:"callbacks"`            // for fe
-	RunbookUrl         string            `json:"runbook_url" column:"runbook_url"`
-	NotifyRecovered    int               `json:"notify_recovered" column:"notify_recovered"`
-	NotifyChannels     string            `json:"-" column:"notify_channels"` // for db
-	NotifyChannelsJSON []string          `json:"notify_channels"`            // for fe
-	NotifyGroups       string            `json:"-" column:"notify_groups"`   // for db
-	NotifyGroupsJSON   []string          `json:"notify_groups"`              // for fe
-	NotifyGroupsObj    []*UserGroup      `json:"notify_groups_obj"`          // for fe
-	TargetIdent        string            `json:"target_ident" column:"target_ident"`
-	TargetNote         string            `json:"target_note" column:"target_note"`
-	TriggerTime        int64             `json:"trigger_time" column:"trigger_time"`
-	TriggerValue       string            `json:"trigger_value" column:"trigger_value"`
-	TriggerValues      string            `json:"trigger_values"`
-	Tags               string            `json:"-" column:"tags"`                                // for db
-	TagsJSON           []string          `json:"tags"`                                           // for fe
-	TagsMap            map[string]string `json:"tags_map"`                                       // for internal usage
-	OriginalTags       string            `json:"-" column:"original_tags"`                       // for db
-	OriginalTagsJSON   []string          `json:"original_tags"`                                  // for fe
-	Annotations        string            `json:"-" column:"annotations"`                         //
-	AnnotationsJSON    map[string]string `json:"annotations"`                                    // for fe
-	IsRecovered        bool              `json:"is_recovered"`                                   // for notify.py
-	NotifyUsersObj     []*User           `json:"notify_users_obj"`                               // for notify.py
-	LastEvalTime       int64             `json:"last_eval_time"`                                 // for notify.py 上次计算的时间
-	LastSentTime       int64             `json:"last_sent_time"`                                 // 上次发送时间
-	NotifyCurNumber    int               `json:"notify_cur_number" column:"notify_cur_number"`   // notify: current number
-	FirstTriggerTime   int64             `json:"first_trigger_time" column:"first_trigger_time"` // 连续告警的首次告警时间
-	ExtraConfig        interface{}       `json:"extra_config"`
-	Status             int               `json:"status"`
-	Claimant           string            `json:"claimant"`
-	SubRuleId          int64             `json:"sub_rule_id"`
-	ExtraInfo          []string          `json:"extra_info"`
+	Id                 int64               `json:"id" column:"id"`
+	Cate               string              `json:"cate" column:"cate"`
+	Cluster            string              `json:"cluster" column:"cluster"`
+	DatasourceId       int64               `json:"datasource_id" column:"datasource_id"`
+	GroupId            int64               `json:"group_id" column:"group_id"`     // busi group id
+	GroupName          string              `json:"group_name" column:"group_name"` // busi group name
+	Hash               string              `json:"hash" column:"hash"`             // rule_id + vector_key
+	RuleId             int64               `json:"rule_id" column:"rule_id"`
+	RuleName           string              `json:"rule_name" column:"rule_name"`
+	RuleNote           string              `json:"rule_note" column:"rule_note"`
+	RuleProd           string              `json:"rule_prod" column:"rule_prod"`
+	RuleAlgo           string              `json:"rule_algo" column:"rule_algo"`
+	Severity           int                 `json:"severity" column:"severity"`
+	PromForDuration    int                 `json:"prom_for_duration" column:"prom_for_duration"`
+	PromQl             string              `json:"prom_ql" column:"prom_ql"`
+	RuleConfig         string              `json:"-" column:"rule_config"` // rule config
+	RuleConfigJson     interface{}         `json:"rule_config"`            // rule config for fe
+	PromEvalInterval   int                 `json:"prom_eval_interval" column:"prom_eval_interval"`
+	Callbacks          string              `json:"-" column:"callbacks"` // for db
+	CallbacksJSON      []string            `json:"callbacks"`            // for fe
+	RunbookUrl         string              `json:"runbook_url" column:"runbook_url"`
+	NotifyRecovered    int                 `json:"notify_recovered" column:"notify_recovered"`
+	NotifyChannels     string              `json:"-" column:"notify_channels"` // for db
+	NotifyChannelsJSON []string            `json:"notify_channels"`            // for fe
+	NotifyGroups       string              `json:"-" column:"notify_groups"`   // for db
+	NotifyGroupsJSON   []string            `json:"notify_groups"`              // for fe
+	NotifyGroupsObj    []*UserGroup        `json:"notify_groups_obj"`          // for fe
+	TargetIdent        string              `json:"target_ident" column:"target_ident"`
+	TargetNote         string              `json:"target_note" column:"target_note"`
+	TriggerTime        int64               `json:"trigger_time" column:"trigger_time"`
+	TriggerValue       string              `json:"trigger_value" column:"trigger_value"`
+	TriggerValues      string              `json:"trigger_values"`
+	TriggerValuesJson  EventTriggerValues  `json:"trigger_values_json"`
+	Tags               string              `json:"-" column:"tags"`                                // for db
+	TagsJSON           []string            `json:"tags"`                                           // for fe
+	TagsMap            map[string]string   `json:"tags_map"`                                       // for internal usage
+	OriginalTags       string              `json:"-" column:"original_tags"`                       // for db
+	OriginalTagsJSON   []string            `json:"original_tags"`                                  // for fe
+	Annotations        string              `json:"-" column:"annotations"`                         //
+	AnnotationsJSON    map[string]string   `json:"annotations"`                                    // for fe
+	IsRecovered        bool                `json:"is_recovered"`                                   // for notify.py
+	NotifyUsersObj     []*User             `json:"notify_users_obj"`                               // for notify.py
+	LastEvalTime       int64               `json:"last_eval_time"`                                 // for notify.py 上次计算的时间
+	LastSentTime       int64               `json:"last_sent_time"`                                 // 上次发送时间
+	NotifyCurNumber    int                 `json:"notify_cur_number" column:"notify_cur_number"`   // notify: current number
+	FirstTriggerTime   int64               `json:"first_trigger_time" column:"first_trigger_time"` // 连续告警的首次告警时间
+	ExtraConfig        interface{}         `json:"extra_config"`
+	Status             int                 `json:"status"`
+	Claimant           string              `json:"claimant"`
+	SubRuleId          int64               `json:"sub_rule_id"`
+	ExtraInfo          []string            `json:"extra_info"`
+	Target             *Target             `json:"target"`
+	RecoverConfig      RecoverConfig       `json:"recover_config"`
+	RuleHash           string              `json:"rule_hash"`
+	ExtraInfoMap       []map[string]string `json:"extra_info_map"`
+}
+
+type EventTriggerValues struct {
+	ValuesWithUnit map[string]unit.FormattedValue `json:"values_with_unit"`
 }
 
 func (e *AlertCurEvent) GetTableName() string {
@@ -109,8 +119,18 @@ func (e *AlertCurEvent) ParseRule(field string) error {
 				"{{$value := .TriggerValue}}",
 			}
 
+			templateFuncMapCopy := tplx.NewTemplateFuncMap()
+			templateFuncMapCopy["query"] = func(promql string, param ...int64) []AnomalyPoint {
+				datasourceId := e.DatasourceId
+				if len(param) > 0 {
+					datasourceId = param[0]
+				}
+				value := tplx.Query(datasourceId, promql)
+				return ConvertAnomalyPoints(value)
+			}
+
 			text := strings.Join(append(defs, f), "")
-			t, err := template.New(fmt.Sprint(e.RuleId)).Funcs(template.FuncMap(tplx.TemplateFuncMap)).Parse(text)
+			t, err := template.New(fmt.Sprint(e.RuleId)).Funcs(templateFuncMapCopy).Parse(text)
 			if err != nil {
 				e.AnnotationsJSON[k] = fmt.Sprintf("failed to parse annotations: %v", err)
 				continue
@@ -309,8 +329,12 @@ func (e *AlertCurEvent) DB2FE() error {
 	e.CallbacksJSON = strings.Fields(e.Callbacks)
 	e.TagsJSON = strings.Split(e.Tags, ",,")
 	e.OriginalTagsJSON = strings.Split(e.OriginalTags, ",,")
-	json.Unmarshal([]byte(e.Annotations), &e.AnnotationsJSON)
-	json.Unmarshal([]byte(e.RuleConfig), &e.RuleConfigJson)
+	if err := json.Unmarshal([]byte(e.Annotations), &e.AnnotationsJSON); err != nil {
+		return err
+	}
+	if err := json.Unmarshal([]byte(e.RuleConfig), &e.RuleConfigJson); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -341,13 +365,55 @@ func (e *AlertCurEvent) DB2Mem() {
 			continue
 		}
 
-		arr := strings.Split(pair, "=")
+		arr := strings.SplitN(pair, "=", 2)
 		if len(arr) != 2 {
 			continue
 		}
 
 		e.TagsMap[arr[0]] = arr[1]
 	}
+
+	// 解决之前数据库中 FirstTriggerTime 为 0 的情况
+	if e.FirstTriggerTime == 0 {
+		e.FirstTriggerTime = e.TriggerTime
+	}
+}
+
+func (e *AlertCurEvent) OverrideGlobalWebhook() bool {
+	var rc RuleConfig
+	if err := json.Unmarshal([]byte(e.RuleConfig), &rc); err != nil {
+		logger.Warningf("failed to unmarshal rule config: %v", err)
+		return false
+	}
+	return rc.OverrideGlobalWebhook
+}
+
+func FillRuleConfigTplName(ctx *ctx.Context, ruleConfig string) (interface{}, bool) {
+	var config RuleConfig
+	err := json.Unmarshal([]byte(ruleConfig), &config)
+	if err != nil {
+		logger.Warningf("failed to unmarshal rule config: %v", err)
+		return nil, false
+	}
+
+	if len(config.TaskTpls) == 0 {
+		return nil, false
+	}
+
+	for i := 0; i < len(config.TaskTpls); i++ {
+		tpl, err := TaskTplGetById(ctx, config.TaskTpls[i].TplId)
+		if err != nil {
+			logger.Warningf("failed to get task tpl by id:%d, %v", config.TaskTpls[i].TplId, err)
+			return nil, false
+		}
+
+		if tpl == nil {
+			logger.Warningf("task tpl not found by id:%d", config.TaskTpls[i].TplId)
+			return nil, false
+		}
+		config.TaskTpls[i].TplName = tpl.Title
+	}
+	return config, true
 }
 
 // for webui
@@ -385,7 +451,7 @@ func (e *AlertCurEvent) FillNotifyGroups(ctx *ctx.Context, cache map[int64]*User
 	return nil
 }
 
-func AlertCurEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, dsIds []int64, cates []string, query string) (int64, error) {
+func AlertCurEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, dsIds []int64, cates []string, ruleId int64, query string) (int64, error) {
 	finder := zorm.NewSelectFinder(AlertCurEventTableName, "count(*)").Append("WHERE 1=1 ")
 
 	//session := DB(ctx).Model(&AlertCurEvent{})
@@ -418,6 +484,11 @@ func AlertCurEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, 
 		//session = session.Where("cate in ?", cates)
 	}
 
+	if ruleId > 0 {
+		finder.Append("and rule_id = ?", ruleId)
+		//session = session.Where("rule_id = ?", ruleId)
+	}
+
 	if query != "" {
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
@@ -430,7 +501,9 @@ func AlertCurEventTotal(ctx *ctx.Context, prods []string, bgids []int64, stime, 
 	//return Count(session)
 }
 
-func AlertCurEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64, severity int, dsIds []int64, cates []string, query string, limit, offset int) ([]AlertCurEvent, error) {
+func AlertCurEventsGet(ctx *ctx.Context, prods []string, bgids []int64, stime, etime int64,
+	severity int, dsIds []int64, cates []string, ruleId int64, query string, limit, offset int) (
+	[]AlertCurEvent, error) {
 	finder := zorm.NewSelectFinder(AlertCurEventTableName).Append("WHERE 1=1 ")
 	//session := DB(ctx).Model(&AlertCurEvent{})
 	if stime != 0 && etime != 0 {
@@ -462,6 +535,11 @@ func AlertCurEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, e
 		//session = session.Where("cate in ?", cates)
 	}
 
+	if ruleId > 0 {
+		finder.Append("and rule_id = ?", ruleId)
+		//session = session.Where("rule_id = ?", ruleId)
+	}
+
 	if query != "" {
 		arr := strings.Fields(query)
 		for i := 0; i < len(arr); i++ {
@@ -491,6 +569,30 @@ func AlertCurEventGets(ctx *ctx.Context, prods []string, bgids []int64, stime, e
 	return lst, err
 }
 
+func AlertCurEventCountByRuleId(ctx *ctx.Context, rids []int64, stime, etime int64) map[int64]int64 {
+	type Row struct {
+		RuleId int64
+		Cnt    int64
+	}
+	var rows []Row
+
+	finder := zorm.NewSelectFinder(AlertCurEventTableName, "rule_id, count(*) as cnt").Append("WHERE trigger_time between ? and ? group by rule_id", stime, etime)
+	finder.SelectTotalCount = false
+	err := zorm.Query(ctx.Ctx, finder, &rows, nil)
+	//err := DB(ctx).Model(&AlertCurEvent{}).Select("rule_id, count(*) as cnt").Where("trigger_time between ? and ?", stime, etime).Group("rule_id").Find(&rows).Error
+
+	if err != nil {
+		logger.Errorf("Failed to count group by rule_id: %v", err)
+		return nil
+	}
+
+	curEventTotalByRid := make(map[int64]int64, len(rids))
+	for _, r := range rows {
+		curEventTotalByRid[r.RuleId] = r.Cnt
+	}
+	return curEventTotalByRid
+}
+
 func AlertCurEventDel(ctx *ctx.Context, ids []int64) error {
 	if len(ids) == 0 {
 		return nil
@@ -501,6 +603,10 @@ func AlertCurEventDel(ctx *ctx.Context, ids []int64) error {
 }
 
 func AlertCurEventDelByHash(ctx *ctx.Context, hash string) error {
+	if !ctx.IsCenter {
+		_, err := poster.GetByUrls[string](ctx, "/v1/n9e/alert-cur-events-del-by-hash?hash="+hash)
+		return err
+	}
 	finder := zorm.NewDeleteFinder(AlertCurEventTableName).Append("WHERE hash = ?", hash)
 	return UpdateFinder(ctx, finder)
 	//return DB(ctx).Where("hash = ?", hash).Delete(&AlertCurEvent{}).Error
@@ -638,8 +744,8 @@ func AlertCurEventGetMap(ctx *ctx.Context, cluster string) (map[int64]map[string
 	return ret, nil
 }
 
-func (m *AlertCurEvent) UpdateFieldsMap(ctx *ctx.Context, fields map[string]interface{}) error {
-	return UpdateFieldsMap(ctx, m, m.Id, fields)
+func (e *AlertCurEvent) UpdateFieldsMap(ctx *ctx.Context, fields map[string]interface{}) error {
+	return UpdateFieldsMap(ctx, e, e.Id, fields)
 	//return DB(ctx).Model(m).Updates(fields).Error
 }
 

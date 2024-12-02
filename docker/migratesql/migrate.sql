@@ -84,3 +84,36 @@ ALTER TABLE recording_rule ADD COLUMN cron_pattern VARCHAR(255) DEFAULT '' COMME
 /* v7.0.0-beta.14 */
 ALTER TABLE alert_cur_event ADD COLUMN original_tags TEXT COMMENT 'labels key=val,,k2=v2';
 ALTER TABLE alert_his_event ADD COLUMN original_tags TEXT COMMENT 'labels key=val,,k2=v2';
+
+/* v7.1.0 */
+ALTER TABLE target ADD COLUMN os VARCHAR(31) DEFAULT '' COMMENT 'os type';
+
+/* v7.2.0 */
+CREATE TABLE notification_record (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `event_id` BIGINT NOT NULL,
+    `sub_id` BIGINT NOT NULL,
+    `channel` VARCHAR(255) NOT NULL,
+    `status` TINYINT NOT NULL DEFAULT 0,
+    `target` VARCHAR(1024) NOT NULL,
+    `details` VARCHAR(2048),
+    `created_at` BIGINT NOT NULL,
+    INDEX idx_evt (event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+/* v7.3.0 2024-08-26 */
+ALTER TABLE `target` ADD COLUMN `host_tags` TEXT COMMENT 'global labels set in conf file';
+
+/* v7.3.4 2024-08-28 */
+ALTER TABLE `builtin_payloads` ADD COLUMN `component_id` bigint(20) NOT NULL DEFAULT 0 COMMENT 'component_id';
+
+/* v7.4.0 2024-09-20 */
+CREATE TABLE `target_busi_group` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `target_ident` varchar(191) NOT NULL,
+  `group_id` bigint NOT NULL,
+  `update_at` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_target_group` (`target_ident`,`group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -32,6 +32,7 @@ type Alerting struct {
 	Timeout           int64
 	TemplatesDir      string
 	NotifyConcurrency int
+	WebhookBatchSend  bool
 }
 
 type CallPlugin struct {
@@ -57,10 +58,6 @@ func (a *Alert) PreCheck(configDir string) {
 
 	if a.Heartbeat.Interval == 0 {
 		a.Heartbeat.Interval = 1000
-	}
-
-	if a.Heartbeat.EngineName == "" {
-		a.Heartbeat.EngineName = "default"
 	}
 
 	if a.EngineDelay == 0 {

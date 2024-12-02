@@ -53,10 +53,11 @@ type Processor struct {
 	datasourceId int64
 	EngineName   string
 
-	rule     *models.AlertRule
-	fires    *AlertCurEventMap
-	pendings *AlertCurEventMap
-	inhibit  bool
+	rule                 *models.AlertRule
+	fires                *AlertCurEventMap
+	pendings             *AlertCurEventMap
+	pendingsUseByRecover *AlertCurEventMap
+	inhibit              bool
 
 	tagsMap    map[string]string
 	tagsArr    []string
@@ -125,7 +126,7 @@ func NewProcessor(engineName string, rule *models.AlertRule, datasourceId int64,
 	return p
 }
 
-func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inhibit bool) {
+func (p *Processor) Handle(anomalyPoints []models.AnomalyPoint, from string, inhibit bool) {
 	// 有可能rule的一些配置已经发生变化，比如告警接收人、callbacks等
 	// 这些信息的修改是不会引起worker restart的，但是确实会影响告警处理逻辑
 	// 所以，这里直接从memsto.AlertRuleCache中获取并覆盖
@@ -133,9 +134,12 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 	cachedRule := p.alertRuleCache.Get(p.rule.Id)
 	if cachedRule == nil {
 		logger.Errorf("rule not found %+v", anomalyPoints)
-		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "handle_event").Inc()
+		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "handle_event", p.BusiGroupCache.GetNameByBusiGroupId(p.rule.GroupId), fmt.Sprintf("%v", p.rule.Id)).Inc()
 		return
 	}
+
+	// 在 rule 变化之前取到 ruleHash
+	ruleHash := p.rule.Hash()
 
 	p.rule = cachedRule
 	now := time.Now().Unix()
@@ -144,7 +148,7 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 	// 根据 event 的 tag 将 events 分组，处理告警抑制的情况
 	eventsMap := make(map[string][]*models.AlertCurEvent)
 	for _, anomalyPoint := range anomalyPoints {
-		event := p.BuildEvent(anomalyPoint, from, now)
+		event := p.BuildEvent(anomalyPoint, from, now, ruleHash)
 		// 如果 event 被 mute 了,本质也是 fire 的状态,这里无论如何都添加到 alertingKeys 中,防止 fire 的事件自动恢复了
 		hash := event.Hash
 		alertingKeys[hash] = struct{}{}
@@ -169,10 +173,12 @@ func (p *Processor) Handle(anomalyPoints []common.AnomalyPoint, from string, inh
 		p.handleEvent(events)
 	}
 
-	p.HandleRecover(alertingKeys, now, inhibit)
+	if from == "inner" {
+		p.HandleRecover(alertingKeys, now, inhibit)
+	}
 }
 
-func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, now int64) *models.AlertCurEvent {
+func (p *Processor) BuildEvent(anomalyPoint models.AnomalyPoint, from string, now int64, ruleHash string) *models.AlertCurEvent {
 	p.fillTags(anomalyPoint)
 	p.mayHandleIdent()
 	hash := Hash(p.rule.Id, p.datasourceId, anomalyPoint)
@@ -198,6 +204,7 @@ func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, no
 	event.TargetNote = p.targetNote
 	event.TriggerValue = anomalyPoint.ReadableValue()
 	event.TriggerValues = anomalyPoint.Values
+	event.TriggerValuesJson = models.EventTriggerValues{ValuesWithUnit: anomalyPoint.ValuesUnit}
 	event.TagsJSON = p.tagsArr
 	event.Tags = strings.Join(p.tagsArr, ",,")
 	event.IsRecovered = false
@@ -210,6 +217,17 @@ func (p *Processor) BuildEvent(anomalyPoint common.AnomalyPoint, from string, no
 	event.Severity = anomalyPoint.Severity
 	event.ExtraConfig = p.rule.ExtraConfigJSON
 	event.PromQl = anomalyPoint.Query
+	event.RecoverConfig = anomalyPoint.RecoverConfig
+	event.RuleHash = ruleHash
+
+	if p.target != "" {
+		if pt, exist := p.TargetCache.Get(p.target); exist {
+			pt.GroupNames = p.BusiGroupCache.GetNamesByBusiGroupIds(pt.GroupIds)
+			event.Target = pt
+		} else {
+			logger.Infof("Target[ident: %s] doesn't exist in cache.", p.target)
+		}
+	}
 
 	if event.TriggerValues != "" && strings.Count(event.TriggerValues, "$") > 1 {
 		// TriggerValues 有多个变量，将多个变量都放到 TriggerValue 中
@@ -232,17 +250,17 @@ func Relabel(rule *models.AlertRule, event *models.AlertCurEvent) {
 		return
 	}
 
+	if len(rule.EventRelabelConfig) == 0 {
+		return
+	}
+
 	// need to keep the original label
 	event.OriginalTags = event.Tags
 	event.OriginalTagsJSON = make([]string, len(event.TagsJSON))
 
 	labels := make([]prompb.Label, len(event.TagsJSON))
 	for i, tag := range event.TagsJSON {
-		label := strings.Split(tag, "=")
-		if len(label) != 2 {
-			logger.Errorf("event%+v relabel: the label length is not 2:%v", event, label)
-			continue
-		}
+		label := strings.SplitN(tag, "=", 2)
 		event.OriginalTagsJSON[i] = tag
 		labels[i] = prompb.Label{Name: label[0], Value: label[1]}
 	}
@@ -281,7 +299,7 @@ func (p *Processor) HandleRecover(alertingKeys map[string]struct{}, now int64, i
 	}
 
 	hashArr := make([]string, 0, len(alertingKeys))
-	for hash := range p.fires.GetAll() {
+	for hash, _ := range p.fires.GetAll() {
 		if _, has := alertingKeys[hash]; has {
 			continue
 		}
@@ -300,7 +318,7 @@ func (p *Processor) HandleRecoverEvent(hashArr []string, now int64, inhibit bool
 
 	if !inhibit {
 		for _, hash := range hashArr {
-			p.RecoverSingle(hash, now, nil)
+			p.RecoverSingle(false, hash, now, nil)
 		}
 		return
 	}
@@ -328,11 +346,11 @@ func (p *Processor) HandleRecoverEvent(hashArr []string, now int64, inhibit bool
 	}
 
 	for _, event := range eventMap {
-		p.RecoverSingle(event.Hash, now, nil)
+		p.RecoverSingle(false, event.Hash, now, nil)
 	}
 }
 
-func (p *Processor) RecoverSingle(hash string, now int64, value *string, values ...string) {
+func (p *Processor) RecoverSingle(byRecover bool, hash string, now int64, value *string, values ...string) {
 	cachedRule := p.rule
 	if cachedRule == nil {
 		return
@@ -342,11 +360,28 @@ func (p *Processor) RecoverSingle(hash string, now int64, value *string, values 
 	if !has {
 		return
 	}
+
 	// 如果配置了留观时长，就不能立马恢复了
-	if cachedRule.RecoverDuration > 0 && now-event.LastEvalTime < cachedRule.RecoverDuration {
+	if cachedRule.RecoverDuration > 0 {
+		lastPendingEvent, has := p.pendingsUseByRecover.Get(hash)
+		if !has {
+			// 说明没有产生过异常点，就不需要恢复了
+			logger.Debugf("rule_eval:%s event:%v do not has pending event, not recover", p.Key(), event)
+			return
+		}
+
+		if now-lastPendingEvent.LastEvalTime < cachedRule.RecoverDuration {
+			logger.Debugf("rule_eval:%s event:%v not recover", p.Key(), event)
+			return
+		}
+	}
+
+	// 如果设置了恢复条件，则不能在此处恢复，必须依靠 recoverPoint 来恢复
+	if event.RecoverConfig.JudgeType != models.Origin && !byRecover {
 		logger.Debugf("rule_eval:%s event:%v not recover", p.Key(), event)
 		return
 	}
+
 	if value != nil {
 		event.TriggerValue = *value
 		if len(values) > 0 {
@@ -358,6 +393,7 @@ func (p *Processor) RecoverSingle(hash string, now int64, value *string, values 
 	// 我确实无法分辨，是prom中有值但是未满足阈值所以没返回，还是prom中确实丢了一些点导致没有数据可以返回，尴尬
 	p.fires.Delete(hash)
 	p.pendings.Delete(hash)
+	p.pendingsUseByRecover.Delete(hash)
 
 	// 可能是因为调整了promql才恢复的，所以事件里边要体现最新的promql，否则用户会比较困惑
 	// 当然，其实rule的各个字段都可能发生变化了，都更新一下吧
@@ -377,6 +413,13 @@ func (p *Processor) handleEvent(events []*models.AlertCurEvent) {
 		if event == nil {
 			continue
 		}
+
+		if _, has := p.pendingsUseByRecover.Get(event.Hash); has {
+			p.pendingsUseByRecover.UpdateLastEvalTime(event.Hash, event.LastEvalTime)
+		} else {
+			p.pendingsUseByRecover.Set(event.Hash, event)
+		}
+
 		if p.rule.PromForDuration == 0 {
 			fireEvents = append(fireEvents, event)
 			if severity > event.Severity {
@@ -385,7 +428,7 @@ func (p *Processor) handleEvent(events []*models.AlertCurEvent) {
 			continue
 		}
 
-		var preTriggerTime int64
+		var preTriggerTime int64 // 第一个 pending event 的触发时间
 		preEvent, has := p.pendings.Get(event.Hash)
 		if has {
 			p.pendings.UpdateLastEvalTime(event.Hash, event.LastEvalTime)
@@ -471,22 +514,24 @@ func (p *Processor) pushEventToQueue(e *models.AlertCurEvent) {
 	dispatch.LogEvent(e, "push_queue")
 	if !queue.EventQueue.PushFront(e) {
 		logger.Warningf("event_push_queue: queue is full, event:%+v", e)
-		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "push_event_queue").Inc()
+		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "push_event_queue", p.BusiGroupCache.GetNameByBusiGroupId(p.rule.GroupId), fmt.Sprintf("%v", p.rule.Id)).Inc()
 	}
 }
 
 func (p *Processor) RecoverAlertCurEventFromDb() {
 	p.pendings = NewAlertCurEventMap(nil)
+	p.pendingsUseByRecover = NewAlertCurEventMap(nil)
 
 	curEvents, err := models.AlertCurEventGetByRuleIdAndDsId(p.ctx, p.rule.Id, p.datasourceId)
 	if err != nil {
 		logger.Errorf("recover event from db for rule:%s failed, err:%s", p.Key(), err)
-		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "get_recover_event").Inc()
+		p.Stats.CounterRuleEvalErrorTotal.WithLabelValues(fmt.Sprintf("%v", p.DatasourceId()), "get_recover_event", p.BusiGroupCache.GetNameByBusiGroupId(p.rule.GroupId), fmt.Sprintf("%v", p.rule.Id)).Inc()
 		p.fires = NewAlertCurEventMap(nil)
 		return
 	}
 
 	fireMap := make(map[string]*models.AlertCurEvent)
+	pendingsUseByRecoverMap := make(map[string]*models.AlertCurEvent)
 	for _, event := range curEvents {
 		if event.Cate == models.HOST {
 			target, exists := p.TargetCache.Get(event.TargetIdent)
@@ -497,13 +542,24 @@ func (p *Processor) RecoverAlertCurEventFromDb() {
 		}
 
 		event.DB2Mem()
+		target, exists := p.TargetCache.Get(event.TargetIdent)
+		if exists {
+			target.GroupNames = p.BusiGroupCache.GetNamesByBusiGroupIds(target.GroupIds)
+			event.Target = target
+		}
+
 		fireMap[event.Hash] = event
+		e := *event
+		pendingsUseByRecoverMap[event.Hash] = &e
 	}
 
 	p.fires = NewAlertCurEventMap(fireMap)
+
+	// 修改告警规则，或者进程重启之后，需要重新加载 pendingsUseByRecover
+	p.pendingsUseByRecover = NewAlertCurEventMap(pendingsUseByRecoverMap)
 }
 
-func (p *Processor) fillTags(anomalyPoint common.AnomalyPoint) {
+func (p *Processor) fillTags(anomalyPoint models.AnomalyPoint) {
 	// handle series tags
 	tagsMap := make(map[string]string)
 	for label, value := range anomalyPoint.Labels {
@@ -576,6 +632,7 @@ func (p *Processor) mayHandleGroup() {
 func (p *Processor) DeleteProcessEvent(hash string) {
 	p.fires.Delete(hash)
 	p.pendings.Delete(hash)
+	p.pendingsUseByRecover.Delete(hash)
 }
 
 func labelMapToArr(m map[string]string) []string {
@@ -592,10 +649,10 @@ func labelMapToArr(m map[string]string) []string {
 	return labelStrings
 }
 
-func Hash(ruleId, datasourceId int64, vector common.AnomalyPoint) string {
+func Hash(ruleId, datasourceId int64, vector models.AnomalyPoint) string {
 	return str.MD5(fmt.Sprintf("%d_%s_%d_%d_%s", ruleId, vector.Labels.String(), datasourceId, vector.Severity, vector.Query))
 }
 
-func TagHash(vector common.AnomalyPoint) string {
+func TagHash(vector models.AnomalyPoint) string {
 	return str.MD5(vector.Labels.String())
 }

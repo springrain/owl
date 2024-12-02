@@ -6,6 +6,7 @@ import (
 
 	"github.com/ccfos/nightingale/v6/alert"
 	"github.com/ccfos/nightingale/v6/alert/astats"
+	"github.com/ccfos/nightingale/v6/alert/dispatch"
 	"github.com/ccfos/nightingale/v6/alert/process"
 	alertrt "github.com/ccfos/nightingale/v6/alert/router"
 	"github.com/ccfos/nightingale/v6/center/cconf"
@@ -16,6 +17,7 @@ import (
 	centerrt "github.com/ccfos/nightingale/v6/center/router"
 	"github.com/ccfos/nightingale/v6/center/sso"
 	"github.com/ccfos/nightingale/v6/conf"
+	"github.com/ccfos/nightingale/v6/cron"
 	"github.com/ccfos/nightingale/v6/dumper"
 	"github.com/ccfos/nightingale/v6/ibex/cmd/ibex"
 	"github.com/ccfos/nightingale/v6/memsto"
@@ -44,6 +46,10 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 
 	cconf.MergeOperationConf()
 
+	if config.Alert.Heartbeat.EngineName == "" {
+		config.Alert.Heartbeat.EngineName = "default"
+	}
+
 	logxClean, err := logx.Init(config.Log)
 	if err != nil {
 		return nil, err
@@ -59,7 +65,7 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 	}
 	ctx := ctx.NewContext(context.Background(), db, true)
 	//migrate.Migrate(db)
-	models.InitRoot(ctx)
+	isRootInit := models.InitRoot(ctx)
 
 	config.HTTP.JWTAuth.SigningKey = models.InitJWTSigningKey(ctx)
 
@@ -68,7 +74,7 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 		return nil, err
 	}
 
-	integration.Init(ctx, config.Center.BuiltinIntegrationsDir)
+	go integration.Init(ctx, config.Center.BuiltinIntegrationsDir)
 	var redis storage.Redis
 	redis, err = storage.NewRedis(config.Redis)
 	if err != nil {
@@ -91,9 +97,13 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 	userCache := memsto.NewUserCache(ctx, syncStats)
 	userGroupCache := memsto.NewUserGroupCache(ctx, syncStats)
 	taskTplCache := memsto.NewTaskTplCache(ctx)
+	configCvalCache := memsto.NewCvalCache(ctx, syncStats)
 
 	sso := sso.Init(config.Center, ctx, configCache)
 	promClients := prom.NewPromClient(ctx)
+
+	dispatch.InitRegisterQueryFunc(promClients)
+
 	tdengineClients := tdengine.NewTdengineClient(ctx, config.Alert.Heartbeat)
 
 	externalProcessors := process.NewExternalProcessors()
@@ -103,12 +113,21 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 
 	//go version.GetGithubVersion()
 
+	go cron.CleanNotifyRecord(ctx, config.Center.CleanNotifyRecordDay)
+
 	alertrtRouter := alertrt.New(config.HTTP, config.Alert, alertMuteCache, targetCache, busiGroupCache, alertStats, ctx, externalProcessors)
-	centerRouter := centerrt.New(config.HTTP, config.Center, config.Alert, config.Ibex, cconf.Operations, dsCache, notifyConfigCache, promClients, tdengineClients,
+	centerRouter := centerrt.New(config.HTTP, config.Center, config.Alert, config.Ibex,
+		cconf.Operations, dsCache, notifyConfigCache, promClients, tdengineClients,
 		redis, sso, ctx, metas, idents, targetCache, userCache, userGroupCache)
 	pushgwRouter := pushgwrt.New(config.HTTP, config.Pushgw, config.Alert, targetCache, busiGroupCache, idents, metas, writers, ctx)
 
-	r := httpx.GinEngine(config.Global.RunMode, config.HTTP)
+	go func() {
+		if config.Center.MigrateBusiGroupLabel || models.CanMigrateBg(ctx) {
+			models.MigrateBg(ctx, pushgwRouter.Pushgw.BusiGroupLabelKey)
+		}
+	}()
+
+	r := httpx.GinEngine(config.Global.RunMode, config.HTTP, configCvalCache.PrintBodyPaths, configCvalCache.PrintAccessLog)
 
 	centerRouter.Config(r)
 	alertrtRouter.Config(r)
@@ -121,6 +140,11 @@ func Initialize(configDir string, cryptoKey string) (func(), error) {
 	}
 
 	httpClean := httpx.Init(config.HTTP, r)
+
+	fmt.Printf("please view n9e at  http://%v:%v\n", config.Alert.Heartbeat.IP, config.HTTP.Port)
+	if isRootInit {
+		fmt.Println("username/password: root/root.2020")
+	}
 
 	return func() {
 		logxClean()

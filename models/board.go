@@ -369,3 +369,60 @@ func BoardSetHide(ctx *ctx.Context, ids []int64) error {
 	})
 	return err
 }
+
+func BoardGetsByBids(ctx *ctx.Context, bids []int64) ([]map[string]interface{}, error) {
+	boards := make([]Board, 0)
+	finder := zorm.NewSelectFinder(BoardTableName)
+	finder.SelectTotalCount = false
+	finder.Append("WHERE id IN (?)", bids)
+	err := zorm.Query(ctx.Ctx, finder, &boards, nil)
+	//err := DB(ctx).Where("id IN ?", bids).Find(&boards).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// 收集所有唯一的 group_id
+	groupIDs := make([]int64, 0)
+	groupIDSet := make(map[int64]struct{})
+	for _, board := range boards {
+		if _, exists := groupIDSet[board.GroupId]; !exists {
+			groupIDs = append(groupIDs, board.GroupId)
+			groupIDSet[board.GroupId] = struct{}{}
+		}
+	}
+
+	// 一次性查询所有需要的 BusiGroup
+	busiGroups := make([]BusiGroup, 0)
+	f := zorm.NewSelectFinder(BusiGroupTableName).Append("WHERE id IN (?)", groupIDs)
+	f.SelectTotalCount = false
+	err = zorm.Query(ctx.Ctx, f, &busiGroups, nil)
+	//err = DB(ctx).Where("id IN ?", groupIDs).Find(&busiGroups).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建 group_id 到 BusiGroup 的映射
+	groupMap := make(map[int64]BusiGroup)
+	for _, bg := range busiGroups {
+		groupMap[bg.Id] = bg
+	}
+
+	result := make([]map[string]interface{}, 0, len(boards))
+	for _, board := range boards {
+		busiGroup, exists := groupMap[board.GroupId]
+		if !exists {
+			// 处理找不到对应 BusiGroup 的情况
+			continue
+		}
+
+		item := map[string]interface{}{
+			"busi_group_name": busiGroup.Name,
+			"busi_group_id":   busiGroup.Id,
+			"board_id":        board.Id,
+			"board_name":      board.Name,
+		}
+		result = append(result, item)
+	}
+
+	return result, nil
+}
