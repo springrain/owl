@@ -25,7 +25,7 @@ func (TaskAction) GetTableName() string {
 
 func TaskActionGet(where string, args ...interface{}) (*TaskAction, error) {
 	var obj TaskAction
-	finder := zorm.NewSelectFinder(TaskActionTableName).Append(where, args...)
+	finder := zorm.NewSelectFinder(TaskActionTableName).Append("WHERE "+where, args...)
 	has, err := zorm.QueryRow(context.Background(), finder, &obj)
 	//ret := DB().Where(where, args...).Find(&obj)
 	if err != nil {
@@ -52,7 +52,7 @@ func TaskActionExistsIds(ids []int64) ([]int64, error) {
 }
 
 func CancelWaitingHosts(id int64) error {
-	finder := zorm.NewUpdateFinder(tht(id)).Append(" status=? WHERE id = ? and action = ?", "cancelled", id, "waiting")
+	finder := zorm.NewUpdateFinder(tht(id)).Append(" status=? WHERE id = ? ", "cancelled", id)
 	return models.UpdateFinder(NewN9eCtx(config.C.CenterApi), finder)
 	//return DB().Table(tht(id)).Where("id = ? and status = ?", id, "waiting").Update("status", "cancelled").Error
 }

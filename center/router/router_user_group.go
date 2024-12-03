@@ -179,7 +179,7 @@ func (rt *Router) userGroupMemberAdd(c *gin.Context) {
 	if err == nil {
 		ug.UpdateAt = time.Now().Unix()
 		ug.UpdateBy = me.Username
-		ug.Update(rt.Ctx, "UpdateAt", "UpdateBy")
+		ug.Update(rt.Ctx, "update_at", "update_by")
 	}
 
 	if f.IsSyncToFlashDuty || flashduty.NeedSyncTeam(rt.Ctx) {

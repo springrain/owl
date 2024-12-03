@@ -39,6 +39,7 @@ func TableRecordGets[T any](table, where string, args ...interface{}) (lst T, er
 func TableRecordCount(table, where string, args ...interface{}) (int64, error) {
 	if config.C.IsCenter {
 		finder := zorm.NewSelectFinder(table, "count(*)")
+		finder.InjectionCheck = false
 		if where == "" || len(args) == 0 {
 		} else {
 			models.AppendWhere(finder, where, args...)

@@ -155,7 +155,7 @@ func MarkDoneStatus(id, clock int64, host, status, stdout, stderr string, edgeAl
 			return nil, err
 		}
 
-		finder2 := zorm.NewDeleteFinder(TaskHostDoingTableName).Append("id=? and host=?", id, host)
+		finder2 := zorm.NewDeleteFinder(TaskHostDoingTableName).Append("WHERE id=? and host=?", id, host)
 		return zorm.UpdateFinder(ctx, finder2)
 
 	})

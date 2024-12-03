@@ -208,6 +208,7 @@ func TaskAdd(f models.TaskForm, authUser string, isCenter bool) (int64, error) {
 		Args:      f.Args,
 		Stdin:     f.Stdin,
 		Creator:   f.Creator,
+		Created:   time.Now(),
 	}
 
 	err := taskMeta.CleanFields()

@@ -560,7 +560,7 @@ func UserGets(ctx *ctx.Context, query string, limit, offset int, stime, etime in
 	order string, desc bool) ([]User, error) {
 
 	//session := DB(ctx)
-	finder := zorm.NewSelectFinder(UserTableName, "count(*)").Append("WHERE 1=1")
+	finder := zorm.NewSelectFinder(UserTableName).Append("WHERE 1=1")
 	if stime != 0 && etime != 0 {
 		//session = session.Where("last_active_time between ? and ?", stime, etime)
 		finder.Append("and last_active_time between ? and ?", stime, etime)
